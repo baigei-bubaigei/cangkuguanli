@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "created_on": "2026-10-10",
+  "status": "模板建议，未实施系统导入",
+  "source": {
+    "file": "E:\\ai项目\\仓库系统\\其他资料\\表格\\淼山(副本).xlsx",
+    "sha256": "1566c464bc404d2f6f1e28b06e61c2a957421c1a8fa4b409322fd05d9b3c1ef5",
+    "sheet": "Sheet1 (2)",
+    "dimension": "A1:AF1374"
+  },
+  "ledger_columns": [
+    "货位",
+    "商品名称",
+    "商品类别",
+    "数量",
+    "类别名称",
+    "备注",
+    "规格",
+    "每件个数",
+    "整件数",
+    "散个数",
+    "仓库"
+  ],
+  "import_sheet": "初始库存导入",
+  "import_headers": [
+    "产品名称",
+    "规格",
+    "每件个数",
+    "仓库",
+    "货位",
+    "整件数",
+    "散个数"
+  ],
+  "fields": [
+    {
+      "key": "product_name",
+      "label": "产品名称",
+      "type": "string",
+      "required": true,
+      "source": "B：商品名称",
+      "rule": "保留完整名称，不自动拆数字前缀"
+    },
+    {
+      "key": "variant_name",
+      "label": "规格",
+      "type": "string",
+      "required": true,
+      "source": null,
+      "rule": "人工定义，体现款式、类别/材色和包装差异"
+    },
+    {
+      "key": "units_per_case",
+      "label": "每件个数",
+      "type": "integer",
+      "required": true,
+      "allowed_values": [
+        2,
+        4,
+        6
+      ],
+      "source": null,
+      "rule": "同规格固定，不从商品名称或数量推算"
+    },
+    {
+      "key": "warehouse_name",
+      "label": "仓库",
+      "type": "string",
+      "required": true,
+      "source": null
+    },
+    {
+      "key": "location_name",
+      "label": "货位",
+      "type": "string",
+      "required": true,
+      "source": "A：货位",
+      "rule": "缺失不向下填充"
+    },
+    {
+      "key": "case_count",
+      "label": "整件数",
+      "type": "integer",
+      "minimum": 0,
+      "required": true,
+      "source": null
+    },
+    {
+      "key": "loose_count",
+      "label": "散个数",
+      "type": "integer",
+      "minimum": 0,
+      "required": true,
+      "source": null
+    },
+    {
+      "key": "legacy_category",
+      "label": "商品类别",
+      "type": "string",
+      "required": false,
+      "source": "C：商品类别",
+      "imported_by_seven_column_template": false
+    },
+    {
+      "key": "legacy_category_name",
+      "label": "类别名称",
+      "type": "string",
+      "required": false,
+      "source": "E：类别名称",
+      "imported_by_seven_column_template": false
+    },
+    {
+      "key": "legacy_remark",
+      "label": "备注",
+      "type": "string",
+      "required": false,
+      "source": "F：无表头",
+      "imported_by_seven_column_template": false
+    }
+  ],
+  "source_column_mapping": {
+    "A": "location_name",
+    "B": "product_name",
+    "C": "legacy_category",
+    "D": "quantity_raw",
+    "E": "legacy_category_name",
+    "F": "legacy_remark"
+  },
+  "unique_import_key": [
+    "product_name",
+    "variant_name",
+    "warehouse_name",
+    "location_name"
+  ],
+  "rules": {
+    "ignore_fully_empty_rows": true,
+    "blank_quantity_is_zero": false,
+    "accept_zero_inventory": true,
+    "reject_duplicate_rows": true,
+    "merge_duplicates": false,
+    "reject_existing_initial_record": true,
+    "all_or_nothing_import": true,
+    "preview_before_commit": true,
+    "initialization_only": true,
+    "preserve_packaging_state": true,
+    "auto_convert_loose_to_cases": false,
+    "allow_formula_inputs": false,
+    "unknown_headers": "预览中报错，避免静默丢字段",
+    "optional_source_fields": "台账保存原文，7列导入需在规格里体现必要区别，独立字段导入属于后续实现建议"
+  },
+  "parsing": {
+    "plain_number": "待确认单位",
+    "number_plus_number_ge": "待确认前一数字单位",
+    "number_ge": "仅生成个数候选，包装状态需现场核对",
+    "malformed": "保留原文并阻止导入",
+    "missing_location": "不沿用上一行"
+  },
+  "unresolved": [
+    "裸数字是否表示整件",
+    "加号前数字的单位",
+    "C和E的业务关系及F列含义",
+    "商品名称数字前缀的业务意义",
+    "货位归属仓库及层级结构",
+    "每规格包装数量",
+    "无货位/数量缺失/特殊写法/候选重复的逐行核对"
+  ]
+}
