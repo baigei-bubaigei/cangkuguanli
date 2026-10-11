@@ -1,0 +1,22 @@
+{
+  "name": "prototype",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "build:standalone": "node scripts/make-standalone.mjs",
+    "preview": "vite preview",
+    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "pretest:standalone": "npm run build:standalone",
+    "test:standalone": "node --test tests/standalone-startup.test.mjs"
+  },
+  "dependencies": {
+    "vite": "6.4.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "happy-dom": "^20.14.6"
+  }
+}

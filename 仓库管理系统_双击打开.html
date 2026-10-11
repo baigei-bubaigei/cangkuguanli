@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f6f2">
+  <meta name="description" content="仓库管理系统可交互静态原型，支持手机和电脑离线查看。">
+  <title>仓库管理系统 · 本地演示</title>
+  <style>:root {
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif;
+  color: #1c302c;
+  background: #f4f6f2;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --ink: #1c302c;
+  --muted: #71817b;
+  --soft-muted: #9aa7a1;
+  --line: #e4e9e5;
+  --surface: #ffffff;
+  --canvas: #f4f6f2;
+  --teal: #18796d;
+  --teal-dark: #0e5e55;
+  --teal-soft: #e7f3ef;
+  --sand: #f4efe6;
+  --amber: #9b6a26;
+  --navy: #20312f;
+  --danger: #b7564b;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; min-height: 100%; background: var(--canvas); }
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--canvas);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #8bc7b8; outline-offset: 2px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.brand-lockup { display: flex; align-items: center; gap: 11px; color: var(--ink); font-weight: 700; letter-spacing: -0.02em; }
+.brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; color: #fff; background: var(--teal); font-size: 16px; font-weight: 700; }
+.eyebrow { margin: 0 0 9px; color: var(--teal); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.muted, .page-description { color: var(--muted); }
+
+.button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.button:hover { transform: translateY(-1px); }
+.button:disabled { cursor: not-allowed; opacity: 0.45; transform: none; }
+.button-primary { color: #fff; background: var(--teal); }
+.button-primary:hover { background: var(--teal-dark); }
+.button-dark { color: #fff; background: var(--navy); }
+.button-dark:hover { background: #172523; }
+.button-outline { color: var(--ink); background: #fff; border-color: #d9e1dc; }
+.button-outline:hover { border-color: #9bb5aa; background: #fbfdfb; }
+.button-quiet { min-height: 36px; color: #52635d; background: transparent; border-color: transparent; }
+.button-quiet:hover { background: #f0f4f1; }
+.button-wide { width: 100%; }
+.text-button { padding: 4px 6px; border: 0; color: var(--teal); background: transparent; font-size: 12px; font-weight: 600; }
+.text-button:hover { color: var(--teal-dark); text-decoration: underline; }
+
+/* Entry portals */
+.portal-page { min-height: 100vh; padding: 0 7vw; background: #f6f7f3; }
+.portal-topbar { display: flex; height: 78px; align-items: center; justify-content: space-between; border-bottom: 1px solid #e3e8e3; }
+.portal-caption { color: var(--muted); font-size: 12px; }
+.portal-content { width: min(100%, 1000px); margin: 0 auto; padding: 86px 0 54px; }
+.portal-content > .eyebrow { margin-bottom: 18px; }
+.portal-content h1 { margin: 0; color: var(--ink); font-size: clamp(38px, 5.6vw, 66px); font-weight: 600; letter-spacing: -0.055em; line-height: 1.12; }
+.portal-intro { max-width: 540px; margin: 19px 0 42px; color: #65756e; font-size: 15px; line-height: 1.8; }
+.portal-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.portal-choice { display: flex; min-height: 254px; flex-direction: column; align-items: flex-start; padding: 26px 28px 24px; border: 1px solid #dfe6e1; border-radius: 12px; background: #fff; }
+.portal-choice-admin { background: #edf1ee; border-color: #e0e6e2; }
+.portal-choice-top { display: flex; width: 100%; justify-content: space-between; color: #87968f; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; }
+.portal-choice h2 { margin: 27px 0 7px; font-size: 24px; letter-spacing: -0.03em; }
+.portal-choice p { margin: 0 0 23px; color: #66766f; line-height: 1.7; }
+.portal-choice .button { margin-top: auto; }
+.portal-footnote { margin: 22px 0 0; color: #87948d; font-size: 12px; }
+
+/* Independent login entries */
+.login-page { display: grid; min-height: 100vh; grid-template-columns: minmax(340px, 42%) 1fr; background: #fff; }
+.login-side { display: flex; flex-direction: column; justify-content: space-between; padding: 38px 46px; color: #f5f8f6; background: #213531; }
+.login-side .brand-lockup { color: #f5f8f6; }
+.login-side .brand-mark { color: var(--ink); background: #cfe4d8; }
+.login-side .eyebrow { color: #a9d4c2; }
+.login-message { max-width: 430px; margin-top: -30px; }
+.login-message h1 { margin: 0 0 18px; font-size: clamp(32px, 4vw, 48px); font-weight: 600; letter-spacing: -0.05em; line-height: 1.2; }
+.login-message p:last-child { max-width: 330px; color: #c5d1cb; line-height: 1.8; }
+.login-side-foot { color: #91a39b; font-size: 12px; }
+.login-panel { display: flex; flex-direction: column; padding: 32px 5vw; }
+.back-link { align-self: flex-start; }
+.login-form-wrap { width: min(100%, 400px); margin: auto; padding: 38px 0; }
+.login-form-wrap h2 { margin: 0 0 10px; font-size: 28px; letter-spacing: -0.04em; }
+.login-form-wrap > .muted { margin: 0 0 28px; line-height: 1.7; }
+.form-stack { display: grid; gap: 17px; }
+.form-stack label { display: grid; gap: 8px; color: #34463f; font-size: 12px; font-weight: 600; }
+.form-stack input, .form-stack select, .filters input, .filters select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #dce4df;
+  border-radius: 7px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 13px;
+}
+.form-stack input::placeholder, .filters input::placeholder { color: #a6b0ab; }
+.login-separator { display: flex; align-items: center; gap: 12px; margin: 27px 0 15px; color: #a2ada7; font-size: 11px; }
+.login-separator::before, .login-separator::after { height: 1px; flex: 1; content: ""; background: var(--line); }
+.login-entry-name { display: flex; justify-content: space-between; color: #41544d; font-size: 13px; font-weight: 600; }
+.login-entry-name span { color: #8a9891; font-size: 11px; font-weight: 400; }
+.form-error { margin: -4px 0 0; color: var(--danger); font-size: 12px; line-height: 1.5; }
+
+/* App shell */
+.app-shell { display: flex; min-height: 100vh; background: var(--canvas); }
+.sidebar { position: fixed; z-index: 20; display: flex; width: 238px; height: 100vh; flex-direction: column; background: #fff; border-right: 1px solid var(--line); }
+.sidebar-brand { padding: 24px 20px 22px; border-bottom: 1px solid #edf0ed; }
+.sidebar-brand .brand-lockup { margin-bottom: 17px; font-size: 14px; }
+.system-badge, .soft-pill, .demo-pill, .status-pill, .nav-mini-tag {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.system-badge { padding: 5px 9px; color: #277264; background: #e9f4ef; }
+.system-badge-admin { color: #455a52; background: #edf0eb; }
+.nav-scroll { flex: 1; overflow-y: auto; padding: 15px 12px; }
+.nav-group { margin-bottom: 24px; }
+.nav-group-title { margin: 0 8px 8px; color: #a0aaa5; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
+.nav-link { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: space-between; padding: 0 11px; border: 0; border-radius: 7px; color: #61716a; background: transparent; text-align: left; font-size: 12px; }
+.nav-link:hover { color: var(--ink); background: #f6f8f5; }
+.nav-link-active { color: var(--teal-dark); background: #eaf4ef; font-weight: 700; }
+.nav-mini-tag { padding: 3px 6px; color: #8c6b3d; background: #f6f0e6; font-size: 9px; }
+.sidebar-bottom { padding: 14px 15px 16px; border-top: 1px solid #edf0ed; }
+.user-block { display: flex; align-items: center; gap: 10px; padding: 6px 5px 12px; }
+.avatar { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border-radius: 50%; color: #246e60; background: #e3f0e9; font-size: 12px; font-weight: 700; }
+.avatar-admin { color: #48584f; background: #e9ece7; }
+.user-copy { display: grid; flex: 1; gap: 3px; }
+.user-copy strong { color: var(--ink); font-size: 12px; }
+.user-copy small { color: #94a09a; font-size: 10px; }
+.online-dot { width: 7px; height: 7px; border-radius: 50%; background: #69a889; }
+.logout-button { width: 100%; padding: 8px 5px; border: 0; color: #7e8c85; background: transparent; text-align: left; font-size: 11px; }
+.logout-button:hover { color: var(--danger); }
+.main-column { width: calc(100% - 238px); min-height: 100vh; margin-left: 238px; }
+.app-topbar { position: sticky; z-index: 10; top: 0; display: flex; height: 64px; align-items: center; justify-content: space-between; padding: 0 36px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.96); }
+.breadcrumb { display: flex; align-items: center; gap: 11px; color: #8a9891; font-size: 12px; }
+.breadcrumb strong { color: #31443c; font-weight: 600; }
+.crumb-divider { color: #c1cac4; }
+.topbar-right { display: flex; align-items: center; gap: 17px; }
+.demo-pill { padding: 6px 9px; color: #517061; background: #eef5f0; }
+.topbar-date { color: #87948e; font-size: 11px; }
+.topbar-avatar { width: 29px; height: 29px; flex-basis: 29px; }
+.mobile-menu-button { display: none; }
+.page-content { width: min(100%, 1450px); margin: 0 auto; padding: 35px 36px 60px; }
+.page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin: 0 0 24px; }
+.page-heading .eyebrow { margin-bottom: 8px; }
+.page-heading h1 { margin: 0; color: var(--ink); font-size: 29px; font-weight: 600; letter-spacing: -0.045em; }
+.page-description { max-width: 720px; margin: 8px 0 0; font-size: 12px; line-height: 1.7; }
+.page-heading-actions { display: flex; flex: 0 0 auto; }
+.action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.overview-strip { display: flex; min-height: 65px; align-items: center; gap: 24px; margin-bottom: 18px; padding: 12px 18px; border: 1px solid #e3e9e4; border-radius: 9px; background: #fff; }
+.overview-strip > div:not(.overview-divider) { display: grid; gap: 4px; }
+.overview-strip span { color: #8b9992; font-size: 10px; }
+.overview-strip strong { color: #33473f; font-size: 12px; }
+.overview-divider { width: 1px; height: 32px; background: #e7ebe7; }
+.overview-note { margin-left: auto; color: #819088; font-size: 11px; }
+
+/* Inventory table */
+.data-panel { overflow: hidden; border: 1px solid #e2e8e3; border-radius: 10px; background: #fff; }
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 19px 21px; border-bottom: 1px solid #edf0ed; }
+.table-toolbar h2 { margin: 0; color: #2b3e36; font-size: 14px; font-weight: 700; }
+.table-toolbar p { margin: 5px 0 0; color: #8a9891; font-size: 11px; line-height: 1.5; }
+.table-toolbar .eyebrow { margin: 0 0 7px; color: var(--teal); }
+.filters { display: flex; align-items: center; gap: 9px; }
+.filters input, .filters select { min-height: 37px; }
+.search-field { width: min(240px, 28vw); }
+.filters select { min-width: 125px; }
+.table-wrap { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th { height: 42px; padding: 0 18px; color: #87958e; background: #fafbf9; font-size: 10px; font-weight: 600; white-space: nowrap; }
+td { padding: 13px 18px; border-top: 1px solid #eef1ee; color: #586961; font-size: 12px; vertical-align: middle; }
+td strong { display: block; color: #2e4139; font-size: 12px; font-weight: 600; }
+td small { display: block; margin-top: 4px; color: #91a098; font-size: 10px; }
+.inventory-table th:first-child { width: 33%; }
+.inventory-table th:nth-child(2) { width: 15%; }
+.inventory-table th:nth-child(3) { width: 19%; }
+.inventory-table th:nth-child(4) { width: 20%; }
+.product-name-button { display: block; padding: 0; border: 0; color: #2a4038; background: transparent; font-size: 12px; font-weight: 700; text-align: left; }
+.product-name-button:hover { color: var(--teal); }
+.product-spec { display: block; margin-top: 5px; color: #92a098; font-size: 10px; }
+.ratio-value { color: #394c44; font-weight: 700; }
+.location-toggle { padding: 0; border: 0; color: #52665d; background: transparent; font-size: 11px; }
+.location-toggle span { margin-left: 5px; color: var(--teal); font-size: 10px; }
+.quantity-pair { display: flex; align-items: baseline; gap: 13px; }
+.quantity-pair strong { color: #203a32; font-size: 18px; letter-spacing: -0.04em; }
+.quantity-pair small { display: inline; margin-left: 3px; color: #82918a; font-size: 10px; font-weight: 500; }
+.row-action-cell { text-align: right; }
+.location-detail-row td { padding: 0; background: #f9fbf9; }
+.location-detail { padding: 13px 21px 15px 34px; }
+.location-detail-head { display: flex; justify-content: space-between; padding-bottom: 9px; color: #87958e; font-size: 10px; }
+.location-line { display: grid; min-height: 43px; grid-template-columns: 1fr 180px 110px; align-items: center; border-top: 1px solid #e8eeea; }
+.location-name { display: grid; gap: 3px; color: #43564d; font-size: 11px; }
+.location-name small { margin: 0; color: #9ba79f; font-size: 9px; }
+.location-quantity { color: #40534b; font-size: 11px; font-weight: 600; }
+.location-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.panel-footer { display: flex; justify-content: space-between; padding: 12px 20px; border-top: 1px solid #edf0ed; color: #9aa69f; font-size: 10px; }
+.empty-cell { padding: 34px 20px; color: #89978f; text-align: center; }
+
+/* History and independent system logs */
+.history-toolbar { display: grid; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #edf0ed; }
+.segmented-control { display: flex; flex-wrap: wrap; gap: 4px; }
+.segmented-control button { padding: 7px 11px; border: 0; border-radius: 6px; color: #75837c; background: transparent; font-size: 11px; }
+.segmented-control button:hover { color: var(--ink); background: #f4f7f4; }
+.segmented-control .segment-active { color: var(--teal-dark); background: #e9f3ee; font-weight: 700; }
+.history-filters { justify-content: flex-end; }
+.history-table { min-width: 860px; }
+.history-table td { white-space: nowrap; }
+.record-summary { max-width: 225px; white-space: normal !important; }
+.type-label { display: inline-flex; padding: 4px 7px; border-radius: 5px; color: #356e60; background: #edf5f0; font-size: 10px; font-weight: 600; }
+.type-out { color: #8c5d4c; background: #f8f0ec; }
+.type-move { color: #596a83; background: #eff2f7; }
+.type-split { color: #8a6b37; background: #f7f3e8; }
+.type-init { color: #596b62; background: #eef1ed; }
+.edited-mark { display: inline-block; margin-left: 6px; color: #a47b37; }
+.system-text-tag { color: #52695d; font-size: 11px; }
+.history-table .text-button { white-space: nowrap; }
+.system-log-table { min-width: 620px; }
+.log-filters { flex-wrap: wrap; }
+
+/* Catalog and admin-only pages */
+.catalog-toolbar { min-height: 73px; }
+.soft-pill { padding: 6px 9px; color: #668072; background: #eff4f0; }
+.catalog-table { min-width: 760px; }
+.catalog-table .catalog-note { max-width: 190px; white-space: normal; }
+.accounts-table { min-width: 600px; }
+.status-pill { padding: 5px 8px; }
+.status-active { color: #31715e; background: #e8f3ec; }
+.status-inactive { color: #808b84; background: #f0f2ef; }
+.status-warning { color: #936b30; background: #f7f1e5; }
+.accounts-table td:last-child { text-align: right; }
+.import-upload-panel { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(270px, 340px); gap: 20px 30px; align-items: center; margin-bottom: 18px; padding: 22px; border: 1px solid #e2e8e3; border-radius: 10px; background: #fff; }
+.import-upload-copy .eyebrow { margin-bottom: 6px; }
+.import-upload-copy h2 { margin: 0 0 7px; font-size: 15px; }
+.import-upload-copy p:last-child { max-width: 600px; margin: 0; color: #7e8d85; font-size: 11px; line-height: 1.7; }
+.upload-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.file-button { position: relative; overflow: hidden; }
+.file-button input { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; opacity: 0; }
+.file-name { width: 100%; overflow: hidden; color: #86948c; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.prototype-note { grid-column: 1 / -1; margin: -2px 0 0; color: #9aa59e; font-size: 10px; }
+.import-preview-panel .table-toolbar { align-items: center; }
+.import-table { min-width: 1020px; }
+.import-table td { font-size: 10px; white-space: nowrap; }
+.import-table td small { font-size: 9px; }
+.import-row-excluded { opacity: 0.52; }
+.import-submit-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-top: 1px solid #edf0ed; }
+.import-submit-row p { margin: 0; color: #89968f; font-size: 10px; }
+.import-closed { max-width: 700px; padding: 30px; border: 1px solid #dfe8e1; border-radius: 10px; background: #fff; }
+.import-closed h2 { margin: 0 0 9px; color: #30473d; font-size: 21px; }
+.import-closed p:not(.eyebrow) { margin: 0 0 20px; color: #7b8982; font-size: 12px; }
+
+/* Dialogs and feedback */
+.modal-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 22px; background: rgba(25, 42, 37, 0.36); }
+.modal { width: min(100%, 500px); max-height: min(90vh, 800px); overflow-y: auto; border: 1px solid #dfe6e1; border-radius: 12px; background: #fff; box-shadow: 0 20px 60px rgba(25, 42, 37, 0.17); }
+.modal-wide { width: min(100%, 680px); }
+.modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px 16px; border-bottom: 1px solid #edf0ed; }
+.modal-header h2 { margin: 0; color: #293d35; font-size: 18px; letter-spacing: -0.03em; }
+.modal-header p { margin: 6px 0 0; color: #87948d; font-size: 11px; line-height: 1.6; }
+.modal-form { padding: 19px 22px 22px; }
+.form-two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.calculation-preview { display: grid; gap: 6px; padding: 13px 14px; border-left: 3px solid #62a18d; background: #eff6f1; }
+.calculation-preview span { color: #759186; font-size: 10px; }
+.calculation-preview strong { color: #315348; font-size: 13px; }
+.calculation-preview small { color: #82938b; font-size: 10px; }
+.available-note { margin: -4px 0 0; color: #73857b; font-size: 10px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; padding-top: 5px; }
+.toast-message { position: fixed; z-index: 60; right: 24px; bottom: 24px; max-width: min(90vw, 380px); padding: 12px 17px; border-radius: 8px; color: #fff; background: #244b40; box-shadow: 0 10px 28px rgba(20, 45, 37, 0.17); font-size: 12px; }
+.mobile-scrim { display: none; }
+.audit-entry { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.audit-entry p { line-height: 1.7; }
+.noscript-note { padding: 16px 7vw; color: var(--danger); }
+.standalone-fallback { max-width: 700px; margin: 48px auto; padding: 24px; }
+.standalone-fallback pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+@media (max-width: 1040px) {
+  .page-content { padding-inline: 24px; }
+  .app-topbar { padding-inline: 24px; }
+  .overview-note { display: none; }
+  .page-heading { align-items: flex-start; flex-direction: column; }
+  .page-heading-actions { width: 100%; }
+}
+
+@media (max-width: 760px) {
+  .sidebar { z-index: 31; width: min(82vw, 290px); transform: translateX(-102%); transition: transform 180ms ease; box-shadow: 15px 0 36px rgba(24, 44, 37, 0.1); }
+  .sidebar-open { transform: translateX(0); }
+  .mobile-scrim { position: fixed; z-index: 30; inset: 0; display: block; border: 0; background: rgba(24, 41, 35, 0.25); }
+  .main-column { width: 100%; margin-left: 0; }
+  .app-topbar { height: 58px; padding: 0 16px; }
+  .mobile-menu-button { display: inline-flex; min-height: 33px; align-items: center; padding: 0 9px; border: 1px solid #e0e6e1; border-radius: 6px; color: #456057; background: #fff; font-size: 11px; }
+  .breadcrumb { flex: 1; margin-left: 11px; gap: 7px; font-size: 10px; }
+  .topbar-right { gap: 8px; }
+  .demo-pill { max-width: 76px; overflow: hidden; padding: 5px 7px; font-size: 9px; text-overflow: ellipsis; }
+  .topbar-date { display: none; }
+  .topbar-avatar { width: 27px; height: 27px; flex-basis: 27px; }
+  .page-content { padding: 24px 15px 36px; }
+  .page-heading { gap: 17px; margin-bottom: 18px; }
+  .page-heading h1 { font-size: 25px; }
+  .page-description { max-width: none; font-size: 11px; }
+  .action-row { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .action-row .button { min-height: 36px; padding: 0 5px; font-size: 11px; }
+  .overview-strip { min-height: 59px; gap: 14px; padding: 10px 12px; }
+  .overview-strip strong { font-size: 10px; }
+  .overview-strip span { font-size: 9px; }
+  .table-toolbar { align-items: flex-start; flex-direction: column; gap: 12px; padding: 16px 15px; }
+  .filters { width: 100%; }
+  .search-field { width: auto; flex: 1; }
+  .filters select { min-width: 105px; max-width: 46%; }
+  .inventory-table { min-width: 0; }
+  .inventory-table thead { display: none; }
+  .inventory-table tbody { display: block; }
+  .inventory-row { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 8px 13px; border-top: 1px solid #edf0ed; }
+  .inventory-row td { min-width: 0; padding: 7px 2px; border: 0; }
+  .inventory-row td:nth-child(1) { grid-column: 1 / -1; }
+  .inventory-row td:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .inventory-row td:nth-child(3) { grid-column: 1; grid-row: 3; }
+  .inventory-row td:nth-child(4) { grid-column: 2; grid-row: 2 / span 2; align-self: center; }
+  .inventory-row td:nth-child(5) { display: none; }
+  .product-name-button { font-size: 13px; }
+  .quantity-pair strong { font-size: 17px; }
+  .location-detail-row { display: block; padding: 0 13px 8px; background: #f9fbf9; }
+  .location-detail-row td { display: block; border: 0; }
+  .location-detail { padding: 9px 2px 11px; }
+  .location-line { grid-template-columns: 1fr auto; gap: 4px 12px; padding: 7px 0; }
+  .location-quantity { text-align: right; }
+  .location-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .panel-footer { gap: 12px; padding: 11px 13px; font-size: 9px; }
+  .history-toolbar { padding: 13px; }
+  .segmented-control { flex-wrap: nowrap; overflow-x: auto; }
+  .segmented-control button { flex: 0 0 auto; }
+  .history-filters { flex-direction: column; align-items: stretch; }
+  .history-filters .search-field { width: 100%; }
+  .history-filters select { max-width: none; }
+  .log-filters { align-items: stretch; }
+  .log-filters .search-field { flex-basis: 100%; }
+  .log-filters > label:not(.search-field) { flex: 1; }
+  .log-filters select { width: 100%; max-width: none; }
+  .table-wrap { scrollbar-width: thin; }
+  .catalog-toolbar { align-items: flex-start; }
+  .import-upload-panel { grid-template-columns: 1fr; gap: 16px; padding: 17px; }
+  .upload-control { align-items: flex-start; }
+  .prototype-note { grid-column: auto; line-height: 1.6; }
+  .import-submit-row { align-items: flex-start; flex-direction: column; padding: 14px; }
+  .login-page { grid-template-columns: 1fr; }
+  .login-side { min-height: 210px; padding: 21px 22px; }
+  .login-message { margin: 26px 0 12px; }
+  .login-message h1 { font-size: 28px; }
+  .login-message p:last-child { display: none; }
+  .login-side-foot { display: none; }
+  .login-panel { min-height: calc(100vh - 210px); padding: 20px 23px; }
+  .login-form-wrap { margin: auto 0; padding: 30px 0; }
+  .portal-page { padding: 0 20px; }
+  .portal-topbar { height: 64px; }
+  .portal-caption { font-size: 10px; }
+  .portal-content { padding: 54px 0 36px; }
+  .portal-content h1 { font-size: 43px; }
+  .portal-intro { margin: 16px 0 28px; font-size: 13px; }
+  .portal-choices { grid-template-columns: 1fr; gap: 11px; }
+  .portal-choice { min-height: 210px; padding: 20px; }
+  .portal-choice h2 { margin-top: 20px; font-size: 21px; }
+  .portal-choice p { margin-bottom: 17px; font-size: 12px; }
+  .form-two-column { grid-template-columns: 1fr; }
+  .modal-backdrop { align-items: end; padding: 0; }
+  .modal, .modal-wide { width: 100%; max-height: 92vh; border-radius: 13px 13px 0 0; }
+  .modal-header { padding: 18px 17px 13px; }
+  .modal-form { padding: 16px 17px 20px; }
+  .toast-message { right: 12px; bottom: 12px; left: 12px; max-width: none; text-align: center; }
+}
+</style>
+</head>
+<body>
+  <div id="root"><main class="portal-page"><header class="portal-topbar"><div class="brand-lockup"><span class="brand-mark">仓</span><span>仓库管理</span></div><span class="portal-caption">库存共用 · 系统独立</span></header>
+    <section class="portal-content"><p class="eyebrow">WAREHOUSE OPERATIONS · 本地演示</p><h1>每天的库存，<br>从清楚开始。</h1>
+    <p class="portal-intro">选择一个独立系统入口。两套系统办理的库存业务会汇入同一套库存记录。</p>
+    <div class="portal-choices"><article class="portal-choice"><div class="portal-choice-top"><span>EMPLOYEE PORTAL</span><span>01</span></div><h2>员工系统</h2><p>查看库存、办理日常业务、维护产品与货位。</p><button type="button" class="button button-primary button-wide" data-action="select-system" data-system="employee">进入员工系统登录</button></article>
+    <article class="portal-choice portal-choice-admin"><div class="portal-choice-top"><span>ADMIN PORTAL</span><span>02</span></div><h2>管理员系统</h2><p>办理库存业务，并管理员工账号与初始库存导入。</p><button type="button" class="button button-dark button-wide" data-action="select-system" data-system="admin">进入管理员系统登录</button></article></div>
+    <p class="portal-footnote">纯静态交互演示 · 数据仅在本次打开期间有效，刷新后恢复示例库存。</p></section></main></div>
+  <noscript><p class="noscript-note">请启用浏览器的 JavaScript，以使用登录及库存演示交互。</p></noscript>
+  <script>
+    (function () {
+      function showStartupError(reason) {
+        var root = document.getElementById("root");
+        if (!root) return;
+        root.innerHTML = '<main class="standalone-fallback standalone-error"><h1>页面启动失败</h1><p>请重新打开文件；若仍然失败，请提供下面的错误信息。</p><pre></pre></main>';
+        var detail = root.querySelector("pre");
+        if (detail) detail.textContent = String(reason || "未知错误");
+      }
+      window.addEventListener("error", function (event) {
+        showStartupError(event.message || (event.error && event.error.message));
+      });
+      window.addEventListener("unhandledrejection", function (event) {
+        showStartupError(event.reason && event.reason.message || event.reason);
+      });
+    }());
+  </script>
+  <script>(()=>{var mt=[{id:"sku-a",name:"\u793A\u4F8B\u5546\u54C1 A",category:"\u7C7B\u522B\u793A\u4F8B A",categoryName:"\u7C7B\u522B\u540D\u79F0 A",note:"\u4EC5\u7528\u4E8E\u754C\u9762\u6F14\u793A",spec:"\u6807\u51C6\u89C4\u683C",perCase:4,locations:[{id:"a-01",warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:"A\u533A \xB7 01\u67B6",cases:3,loose:1},{id:"a-02",warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:"B\u533A \xB7 03\u67B6",cases:0,loose:8}]},{id:"sku-b",name:"\u793A\u4F8B\u5546\u54C1 B",category:"\u7C7B\u522B\u793A\u4F8B B",categoryName:"\u7C7B\u522B\u540D\u79F0 B",note:"\u5305\u88C5\u72B6\u6001\u6309\u73B0\u573A\u8BB0\u5F55",spec:"\u5C0F\u5305\u88C5",perCase:2,locations:[{id:"b-01",warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:"A\u533A \xB7 02\u67B6",cases:8,loose:0}]},{id:"sku-c",name:"\u793A\u4F8B\u5546\u54C1 C",category:"\u7C7B\u522B\u793A\u4F8B C",categoryName:"\u7C7B\u522B\u540D\u79F0 C",note:"\u6563\u4E2A\u6F14\u793A",spec:"\u5927\u5305\u88C5",perCase:6,locations:[{id:"c-01",warehouse:"\u4E8C\u53F7\u4ED3\u5E93",spot:"C\u533A \xB7 01\u67B6",cases:0,loose:12},{id:"c-02",warehouse:"\u4E8C\u53F7\u4ED3\u5E93",spot:"\u5730\u9762\u533A",cases:2,loose:2}]},{id:"sku-d",name:"\u793A\u4F8B\u5546\u54C1 D",category:"\u7C7B\u522B\u793A\u4F8B D",categoryName:"\u7C7B\u522B\u540D\u79F0 D",note:"\u53E6\u4E00\u79CD\u4EA7\u54C1\u89C4\u683C",spec:"\u5E38\u89C4\u89C4\u683C",perCase:4,locations:[{id:"d-01",warehouse:"\u4E8C\u53F7\u4ED3\u5E93",spot:"D\u533A \xB7 02\u67B6",cases:5,loose:3}]}],G=[{id:"record-a1",kind:"in",type:"\u5165\u5E93",productId:"sku-b",locationId:"b-01",cases:2,loose:0,occurredAt:"2026-10-10T10:42",createdAt:"2026-10-10T10:43",actor:"\u6797\u5458\u5DE5",sourceSystem:"\u5458\u5DE5\u7CFB\u7EDF",note:"\u65E5\u5E38\u8865\u8D27",editHistory:[]},{id:"record-a2",kind:"out",type:"\u51FA\u5E93",productId:"sku-c",locationId:"c-01",cases:0,loose:3,occurredAt:"2026-10-09T16:15",createdAt:"2026-10-09T16:18",actor:"\u5468\u7BA1\u7406\u5458",sourceSystem:"\u7BA1\u7406\u5458\u7CFB\u7EDF",note:"\u6309\u5355\u9886\u7528",editHistory:[]},{id:"record-a3",kind:"move",type:"\u79FB\u52A8\u8D27\u4F4D",productId:"sku-a",fromLocationId:"a-01",toLocationId:"a-02",cases:0,loose:2,occurredAt:"2026-10-09T14:26",createdAt:"2026-10-09T14:26",actor:"\u6797\u5458\u5DE5",sourceSystem:"\u5458\u5DE5\u7CFB\u7EDF",note:"\u6574\u7406\u8D27\u4F4D",editHistory:[]}],K=[{id:"sys-1",action:"\u767B\u5F55\u7CFB\u7EDF",actor:"\u6797\u5458\u5DE5",system:"\u5458\u5DE5\u7CFB\u7EDF",time:"2026-10-10T09:05"},{id:"sys-2",action:"\u67E5\u770B\u5E93\u5B58\u67E5\u8BE2",actor:"\u6797\u5458\u5DE5",system:"\u5458\u5DE5\u7CFB\u7EDF",time:"2026-10-10T09:12"},{id:"sys-3",action:"\u5458\u5DE5\u8D26\u53F7\u72B6\u6001\u8C03\u6574",actor:"\u5468\u7BA1\u7406\u5458",system:"\u7BA1\u7406\u5458\u7CFB\u7EDF",time:"2026-10-09T17:08"},{id:"sys-4",action:"\u767B\u5F55\u7CFB\u7EDF",actor:"\u5468\u7BA1\u7406\u5458",system:"\u7BA1\u7406\u5458\u7CFB\u7EDF",time:"2026-10-09T08:51"}],V=[{id:"user-1",name:"\u6797\u5458\u5DE5",account:"staff01",status:"\u542F\u7528",createdAt:"2026-09-18"},{id:"user-2",name:"\u9648\u5458\u5DE5",account:"staff02",status:"\u542F\u7528",createdAt:"2026-09-21"},{id:"user-3",name:"\u5434\u5458\u5DE5",account:"staff03",status:"\u505C\u7528",createdAt:"2026-09-26"}],B={employee:{name:"\u5458\u5DE5\u7CFB\u7EDF",user:"\u6797\u5458\u5DE5",account:"staff01"},admin:{name:"\u7BA1\u7406\u5458\u7CFB\u7EDF",user:"\u5468\u7BA1\u7406\u5458",account:"admin01"}},Q=[{id:"inventory",label:"\u5E93\u5B58\u67E5\u8BE2",group:"\u5E93\u5B58\u5DE5\u4F5C\u533A"},{id:"history",label:"\u5E93\u5B58\u4E1A\u52A1\u8BB0\u5F55",group:"\u5E93\u5B58\u5DE5\u4F5C\u533A"},{id:"catalog",label:"\u4EA7\u54C1\u4E0E\u8D27\u4F4D",group:"\u57FA\u7840\u8D44\u6599"},{id:"systemLogs",label:"\u7CFB\u7EDF\u64CD\u4F5C\u65E5\u5FD7",group:"\u8BB0\u5F55\u4E0E\u7BA1\u7406"}];function W(){return mt.map(n=>({...n,locations:n.locations.map(t=>({...t}))}))}function I(n){return`${n}-${Date.now()}-${Math.random().toString(16).slice(2,7)}`}function k(n=new Date){return new Date(n.getTime()-n.getTimezoneOffset()*6e4).toISOString().slice(0,16)}function C(n){if(!n)return"\u2014";let t=new Date(n);if(Number.isNaN(t.getTime()))return n;let r=p=>String(p).padStart(2,"0");return`${t.getFullYear()}-${r(t.getMonth()+1)}-${r(t.getDate())} ${r(t.getHours())}:${r(t.getMinutes())}`}function X(n){return n.locations.reduce((t,r)=>({cases:t.cases+Number(r.cases||0),loose:t.loose+Number(r.loose||0)}),{cases:0,loose:0})}function w(n,t){return`${Number(n||0)} \u4EF6 ${Number(t||0)} \u4E2A`}function v(n,t){return n.find(r=>r.id===t)}function S(n,t,r){var p;return(p=v(n,t))==null?void 0:p.locations.find(g=>g.id===r)}function F(n,t,r){let p=S(n,t,r);return p?`${p.warehouse} \xB7 ${p.spot}`:"\u2014"}function ft(n,t=1){let r=Number(n.cases||0),p=Number(n.loose||0);if(n.kind==="in")return[{id:n.locationId,cases:r,loose:p}];if(n.kind==="out")return[{id:n.locationId,cases:-r,loose:-p}];if(n.kind==="move")return[{id:n.fromLocationId,cases:-r,loose:-p},{id:n.toLocationId,cases:r,loose:p}];if(n.kind==="split"){let g=Number(n.splitCases||0),M=g*Number(n.perCase||0);return[{id:n.locationId,cases:-g,loose:M}]}return[]}function z(n,t,r=1){let p=ft(t,r),g="";return{products:n.map(y=>({...y,locations:y.locations.map(L=>{let T=p.find(_=>_.id===L.id);if(!T||y.id!==t.productId)return L;let x=Number(L.cases||0)+T.cases*r,H=Number(L.loose||0)+T.loose*r;return(x<0||H<0)&&(g="\u66F4\u6B63\u540E\u4F1A\u9020\u6210\u8D27\u4F4D\u5E93\u5B58\u4E0D\u8DB3\uFF0C\u672A\u4FDD\u5B58\u672C\u6B21\u66F4\u6B63\u3002"),{...L,cases:x,loose:H}})})),error:g}}function P(n,t){var r,p;return n.kind==="in"?`\u589E\u52A0 ${w(n.cases,n.loose)}`:n.kind==="out"?`\u51CF\u5C11 ${w(n.cases,n.loose)}`:n.kind==="move"?`${w(n.cases,n.loose)} \xB7 ${((r=S(t,n.productId,n.fromLocationId))==null?void 0:r.spot)||"\u539F\u8D27\u4F4D"} \u2192 ${((p=S(t,n.productId,n.toLocationId))==null?void 0:p.spot)||"\u76EE\u6807\u8D27\u4F4D"}`:n.kind==="split"?`\u62C6\u5F00 ${n.splitCases} \u4EF6 \xB7 \u589E\u52A0 ${n.splitCases*n.perCase} \u4E2A\u6563\u4E2A`:n.kind==="init"?`\u521D\u59CB\u5E93\u5B58 ${w(n.cases,n.loose)}`:"\u2014"}var $t=n=>String(n!=null?n:"").replace(/[&<>"']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[t]),c=$t,Z=n=>Object.entries(n).map(([t,r])=>`data-${t}="${c(r)}"`).join(" "),N=(n,t,r={},p="button-outline")=>`<button type="button" class="button ${p}" data-action="${c(t)}" ${Z(r)}>${c(n)}</button>`,A=(n,t,r={})=>`<button type="button" class="text-button" data-action="${c(t)}" ${Z(r)}>${c(n)}</button>`,Y='<div class="brand-lockup"><span class="brand-mark">\u4ED3</span><span>\u4ED3\u5E93\u7BA1\u7406</span></div>',j=(n,t)=>n.map(r=>{let p=typeof r=="object"?r.value:r,g=typeof r=="object"?r.label:r;return`<option value="${c(p)}" ${String(p)===String(t)?"selected":""}>${c(g)}</option>`}).join(""),$=(n,t,r="",p="text",g="")=>`<label>${c(n)}<input name="${c(t)}" type="${p}" value="${c(r)}" ${g}></label>`,D=(n,t,r,p)=>`<label>${c(n)}<select name="${c(t)}">${j(r,p)}</select></label>`,O=(n,t,r="",p="\u5171\u4EAB\u5E93\u5B58 \xB7 \u672C\u5730\u6F14\u793A")=>`<div class="page-heading"><div><p class="eyebrow">${c(p)}</p><h1>${c(n)}</h1><p class="page-description">${c(t)}</p></div>${r?`<div class="page-heading-actions">${r}</div>`:""}</div>`,q=(n,t,r)=>`<div class="table-wrap"><table class="${n}"><thead><tr>${t.map(p=>`<th>${c(p)}</th>`).join("")}</tr></thead><tbody>${r||`<tr><td colspan="${t.length}" class="empty-cell">\u6CA1\u6709\u7B26\u5408\u6761\u4EF6\u7684\u8BB0\u5F55\u3002</td></tr>`}</tbody></table></div>`;function gt(){return`<main class="portal-page"><header class="portal-topbar">${Y}<span class="portal-caption">\u5E93\u5B58\u5171\u7528 \xB7 \u7CFB\u7EDF\u72EC\u7ACB</span></header>
+    <section class="portal-content"><p class="eyebrow">WAREHOUSE OPERATIONS \xB7 \u672C\u5730\u6F14\u793A</p><h1>\u6BCF\u5929\u7684\u5E93\u5B58\uFF0C<br>\u4ECE\u6E05\u695A\u5F00\u59CB\u3002</h1>
+    <p class="portal-intro">\u9009\u62E9\u4E00\u4E2A\u72EC\u7ACB\u7CFB\u7EDF\u5165\u53E3\u3002\u4E24\u5957\u7CFB\u7EDF\u529E\u7406\u7684\u5E93\u5B58\u4E1A\u52A1\u4F1A\u6C47\u5165\u540C\u4E00\u5957\u5E93\u5B58\u8BB0\u5F55\u3002</p>
+    <div class="portal-choices"><article class="portal-choice"><div class="portal-choice-top"><span>EMPLOYEE PORTAL</span><span>01</span></div><h2>\u5458\u5DE5\u7CFB\u7EDF</h2><p>\u67E5\u770B\u5E93\u5B58\u3001\u529E\u7406\u65E5\u5E38\u4E1A\u52A1\u3001\u7EF4\u62A4\u4EA7\u54C1\u4E0E\u8D27\u4F4D\u3002</p>${N("\u8FDB\u5165\u5458\u5DE5\u7CFB\u7EDF\u767B\u5F55","select-system",{system:"employee"},"button-primary button-wide")}</article>
+    <article class="portal-choice portal-choice-admin"><div class="portal-choice-top"><span>ADMIN PORTAL</span><span>02</span></div><h2>\u7BA1\u7406\u5458\u7CFB\u7EDF</h2><p>\u529E\u7406\u5E93\u5B58\u4E1A\u52A1\uFF0C\u5E76\u7BA1\u7406\u5458\u5DE5\u8D26\u53F7\u4E0E\u521D\u59CB\u5E93\u5B58\u5BFC\u5165\u3002</p>${N("\u8FDB\u5165\u7BA1\u7406\u5458\u7CFB\u7EDF\u767B\u5F55","select-system",{system:"admin"},"button-dark button-wide")}</article></div>
+    <p class="portal-footnote">\u7EAF\u9759\u6001\u4EA4\u4E92\u6F14\u793A \xB7 \u6570\u636E\u4EC5\u5728\u672C\u6B21\u6253\u5F00\u671F\u95F4\u6709\u6548\uFF0C\u5237\u65B0\u540E\u6062\u590D\u793A\u4F8B\u5E93\u5B58\u3002</p></section></main>`}function tt(n=document.getElementById("root")){if(!n)throw new Error("\u627E\u4E0D\u5230\u9875\u9762\u5BB9\u5668\u3002");let t={screen:"portal",system:"employee",page:"inventory",actor:"\u6797\u5458\u5DE5",account:"staff01",products:W(),records:JSON.parse(JSON.stringify(G)),logs:K.map(e=>({...e})),users:V.map(e=>({...e})),query:"",warehouse:"\u5168\u90E8\u4ED3\u5E93",historyQuery:"",type:"\u5168\u90E8\u7C7B\u578B",source:"\u5168\u90E8\u7CFB\u7EDF",logSystem:"\u5168\u90E8\u7CFB\u7EDF",logActor:"\u5168\u90E8\u64CD\u4F5C\u4EBA",logQuery:"",expanded:"",mobileOpen:!1,modal:null,filename:"",importRows:[],initialized:!1},r=()=>t.system==="admin",p=()=>B[t.system].name,g={inventory:"\u5E93\u5B58\u67E5\u8BE2",history:"\u5E93\u5B58\u4E1A\u52A1\u8BB0\u5F55",catalog:"\u4EA7\u54C1\u4E0E\u8D27\u4F4D",accounts:"\u5458\u5DE5\u8D26\u53F7",import:"\u521D\u59CB\u5E93\u5B58\u5BFC\u5165",systemLogs:"\u7CFB\u7EDF\u64CD\u4F5C\u65E5\u5FD7"},M;function y(e){t.logs.unshift({id:I("sys"),action:e,actor:t.actor,account:t.account,system:p(),time:k()})}function L(e){let a=n.querySelector(".toast-message");a&&(a.textContent=e,a.hidden=!1,clearTimeout(M),M=setTimeout(()=>{a.hidden=!0},2800))}function T(e,a){let s=e.querySelector(".form-error");s&&(s.textContent=a,s.hidden=!1)}function x(){let e=B[t.system];return`<main class="login-page"><div class="login-side">${Y}<div class="login-message"><p class="eyebrow">${r()?"ADMIN PORTAL":"EMPLOYEE PORTAL"}</p><h1>${e.name}<br>\u72EC\u7ACB\u767B\u5F55\u5165\u53E3</h1><p>\u5E93\u5B58\u6570\u636E\u5171\u7528\uFF0C\u8D26\u53F7\u4E0E\u7CFB\u7EDF\u64CD\u4F5C\u8BB0\u5F55\u5206\u522B\u7BA1\u7406\u3002</p></div><span class="login-side-foot">\u7EAF\u9759\u6001\u672C\u5730\u6F14\u793A</span></div>
+    <section class="login-panel">${A("\u8FD4\u56DE\u7CFB\u7EDF\u5165\u53E3","portal")}<div class="login-form-wrap"><p class="eyebrow">\u72EC\u7ACB\u767B\u5F55</p><h2>\u767B\u5F55${e.name}</h2><p class="muted">\u6F14\u793A\u8D26\u53F7\uFF1A${e.account}\uFF0C\u5BC6\u7801\uFF1Ademo123\u3002\u4EC5\u7528\u4E8E\u4F53\u9A8C\u754C\u9762\u3002</p>
+    <form data-form="login" class="form-stack">${$("\u8D26\u53F7","account",e.account,"text",'required autocomplete="username"')}${$("\u5BC6\u7801","password","demo123","password",'required autocomplete="current-password"')}<p class="form-error" role="alert" hidden></p><button type="submit" class="button ${r()?"button-dark":"button-primary"} button-wide">\u767B\u5F55${e.name}</button></form><div class="login-separator"><span>\u5F53\u524D\u5165\u53E3</span></div><div class="login-entry-name">${e.name}<span>\xB7 \u72EC\u7ACB\u6F14\u793A\u8D26\u53F7</span></div></div></section></main>`}function H(){let e=[...Q.slice(0,3),...r()?[{id:"accounts",label:"\u5458\u5DE5\u8D26\u53F7",group:"\u8BB0\u5F55\u4E0E\u7BA1\u7406"},{id:"import",label:"\u521D\u59CB\u5E93\u5B58\u5BFC\u5165",group:"\u8BB0\u5F55\u4E0E\u7BA1\u7406"}]:[],Q[3]];return`${t.mobileOpen?'<button class="mobile-scrim" type="button" data-action="close-menu" aria-label="\u5173\u95ED\u83DC\u5355"></button>':""}<aside class="sidebar ${t.mobileOpen?"sidebar-open":""}"><div class="sidebar-brand">${Y}<span class="system-badge ${r()?"system-badge-admin":""}">${p()}</span></div><nav class="nav-scroll" aria-label="\u7CFB\u7EDF\u5BFC\u822A">${[...new Set(e.map(a=>a.group))].map(a=>`<div class="nav-group"><p class="nav-group-title">${a}</p>${e.filter(s=>s.group===a).map(s=>`<button type="button" data-action="navigate" data-page="${s.id}" class="nav-link ${t.page===s.id?"nav-link-active":""}" ${t.page===s.id?'aria-current="page"':""}><span>${s.label}</span>${s.id==="import"?'<span class="nav-mini-tag">\u4EC5\u521D\u59CB\u5316</span>':""}</button>`).join("")}</div>`).join("")}</nav><div class="sidebar-bottom"><div class="user-block"><span class="avatar ${r()?"avatar-admin":""}">${c(t.actor[0])}</span><span class="user-copy"><strong>${c(t.actor)}</strong><small>${c(t.account)}</small></span><span class="online-dot" title="\u6F14\u793A\u5728\u7EBF"></span></div>${N("\u9000\u51FA\u5F53\u524D\u7CFB\u7EDF","logout",{},"logout-button")}</div></aside>`}function _(){let e=[...new Set(t.products.flatMap(o=>o.locations.map(i=>i.warehouse)))],a=t.products.filter(o=>`${o.name} ${o.spec} ${o.category} ${o.categoryName} ${o.locations.map(i=>i.spot).join(" ")}`.toLowerCase().includes(t.query.toLowerCase())&&(t.warehouse==="\u5168\u90E8\u4ED3\u5E93"||o.locations.some(i=>i.warehouse===t.warehouse))),s=a.map(o=>{let i=X(o),l=t.expanded===o.id;return`<tr class="inventory-row" data-product-id="${c(o.id)}"><td><button type="button" class="product-name-button" data-action="expand" data-product="${c(o.id)}" aria-expanded="${l}">${c(o.name)}</button><span class="product-spec">${c(o.spec)}</span></td><td><span class="ratio-value">${o.perCase}</span><span class="muted"> \u4E2A / \u4EF6</span></td><td><button type="button" class="location-toggle" data-action="expand" data-product="${c(o.id)}" aria-expanded="${l}">${o.locations.length} \u4E2A\u8D27\u4F4D <span>${l?"\u6536\u8D77":"\u67E5\u770B"}</span></button></td><td><div class="quantity-pair"><strong>${i.cases}<small>\u4EF6</small></strong><strong>${i.loose}<small>\u4E2A</small></strong></div></td><td class="row-action-cell">${A("\u767B\u8BB0","transaction",{operation:"\u5165\u5E93",product:o.id})}</td></tr>
+      ${l?`<tr class="location-detail-row"><td colspan="5"><div class="location-detail"><div class="location-detail-head"><span>\u8D27\u4F4D\u660E\u7EC6</span><span>\u6BCF\u4EF6 ${o.perCase} \u4E2A</span></div>${o.locations.map(d=>`<div class="location-line"><span class="location-name"><small>${c(d.warehouse)}</small>${c(d.spot)}</span><span class="location-quantity">${w(d.cases,d.loose)}</span><span class="location-actions">${A("\u5165\u5E93","transaction",{operation:"\u5165\u5E93",product:o.id,location:d.id})}${A("\u51FA\u5E93","transaction",{operation:"\u51FA\u5E93",product:o.id,location:d.id})}</span></div>`).join("")}</div></td></tr>`:""}`}).join("");return O("\u5E93\u5B58\u67E5\u8BE2","\u6309\u89C4\u683C\u67E5\u770B\u603B\u5E93\u5B58\u548C\u5404\u8D27\u4F4D\u6570\u91CF\uFF0C\u6563\u4E2A\u4FDD\u6301\u73B0\u573A\u72B6\u6001\u3002",`<div class="action-row">${["\u5165\u5E93","\u51FA\u5E93","\u79FB\u52A8\u8D27\u4F4D","\u62C6\u4EF6"].map(o=>N(o==="\u79FB\u52A8\u8D27\u4F4D"?"\u79FB\u4F4D":o,"transaction",{operation:o},o==="\u5165\u5E93"?"button-primary":"button-outline")).join("")}</div>`)+`<div class="overview-strip"><div><span>\u6F14\u793A\u6570\u636E</span><strong>${t.products.length} \u4E2A\u89C4\u683C</strong></div><div class="overview-divider"></div><div><span>\u5E93\u5B58\u5206\u5E03</span><strong>${t.products.reduce((o,i)=>o+i.locations.length,0)} \u4E2A\u8D27\u4F4D\u8BB0\u5F55</strong></div><div class="overview-note">\u4E24\u5957\u7CFB\u7EDF\u5171\u7528\u5E93\u5B58 \xB7 \u5F53\u524D\u5165\u53E3\uFF1A${p()}</div></div><section class="data-panel"><div class="table-toolbar"><div><h2>\u4EA7\u54C1\u5E93\u5B58</h2><p>\u5171 ${a.length} \u6761\u89C4\u683C\u8BB0\u5F55</p></div><div class="filters"><label class="search-field"><span class="sr-only">\u641C\u7D22\u4EA7\u54C1</span><input data-filter="query" value="${c(t.query)}" placeholder="\u641C\u7D22\u4EA7\u54C1\u3001\u89C4\u683C\u6216\u8D27\u4F4D"></label><label><span class="sr-only">\u9009\u62E9\u4ED3\u5E93</span><select data-filter="warehouse">${j(["\u5168\u90E8\u4ED3\u5E93",...e],t.warehouse)}</select></label></div></div>${q("inventory-table",["\u4EA7\u54C1\u4E0E\u89C4\u683C","\u6BCF\u4EF6\u4E2A\u6570","\u8D27\u4F4D\u5206\u5E03","\u5F53\u524D\u5E93\u5B58","\u64CD\u4F5C"],s)}<div class="panel-footer"><span>\u8DE8\u8D27\u4F4D\u5206\u522B\u6C47\u603B\u6574\u4EF6\u4E0E\u6563\u4E2A\uFF0C\u4E0D\u81EA\u52A8\u6298\u7B97\u3002</span><span>\u6F14\u793A\u6570\u636E</span></div></section>`}function et(){let e=t.records.filter(s=>{let o=v(t.products,s.productId);return(t.type==="\u5168\u90E8\u7C7B\u578B"||t.type===s.type)&&(t.source==="\u5168\u90E8\u7CFB\u7EDF"||t.source===s.sourceSystem)&&`${o==null?void 0:o.name} ${o==null?void 0:o.spec} ${s.actor} ${s.note} ${F(t.products,s.productId,s.locationId||s.fromLocationId)}`.toLowerCase().includes(t.historyQuery.toLowerCase())}),a=e.map(s=>{var i,l,d,m;let o=v(t.products,s.productId);return`<tr><td><span class="type-label type-${s.kind}">${c(s.type)}</span>${(i=s.editHistory)!=null&&i.length?'<small class="edited-mark">\u5DF2\u66F4\u6B63</small>':""}</td><td><strong>${c(o==null?void 0:o.name)}</strong><small>${c(o==null?void 0:o.spec)}</small></td><td class="record-summary">${c(P(s,t.products))}<small>${c(s.note)}</small></td><td>${c(s.kind==="move"?`${(l=S(t.products,s.productId,s.fromLocationId))==null?void 0:l.spot} \u2192 ${(d=S(t.products,s.productId,s.toLocationId))==null?void 0:d.spot}`:F(t.products,s.productId,s.locationId))}</td><td>${c(C(s.occurredAt))}<small>\u767B\u8BB0 ${c(C(s.createdAt))}</small></td><td><strong>${c(s.actor)}</strong><small>${c(s.sourceSystem)}</small></td><td>${s.kind!=="init"?A("\u66F4\u6B63","correction",{record:s.id}):""}${(m=s.editHistory)!=null&&m.length?A("\u4FEE\u6539\u8BB0\u5F55","record-history",{record:s.id}):""}</td></tr>`}).join("");return O("\u5E93\u5B58\u4E1A\u52A1\u8BB0\u5F55","\u4E24\u5957\u7CFB\u7EDF\u5171\u7528\u4E1A\u52A1\u5386\u53F2\uFF0C\u6BCF\u6761\u8BB0\u5F55\u6CE8\u660E\u53D1\u751F\u7AEF\u3002","","\u5171\u4EAB\u4E1A\u52A1\u5386\u53F2")+`<section class="data-panel"><div class="history-toolbar"><div class="segmented-control" aria-label="\u7B5B\u9009\u4E1A\u52A1\u7C7B\u578B">${["\u5168\u90E8\u7C7B\u578B","\u5165\u5E93","\u51FA\u5E93","\u79FB\u52A8\u8D27\u4F4D","\u62C6\u4EF6","\u521D\u59CB\u5E93\u5B58"].map(s=>`<button type="button" data-action="type-filter" data-type="${s}" class="${t.type===s?"segment-active":""}">${s}</button>`).join("")}</div><div class="filters history-filters"><label class="search-field"><span class="sr-only">\u641C\u7D22\u4E1A\u52A1\u8BB0\u5F55</span><input data-filter="historyQuery" value="${c(t.historyQuery)}" placeholder="\u641C\u7D22\u4EA7\u54C1\u3001\u8D27\u4F4D\u6216\u64CD\u4F5C\u4EBA"></label><label><span class="sr-only">\u7B5B\u9009\u6765\u6E90\u7CFB\u7EDF</span><select data-filter="source">${j(["\u5168\u90E8\u7CFB\u7EDF","\u5458\u5DE5\u7CFB\u7EDF","\u7BA1\u7406\u5458\u7CFB\u7EDF"],t.source)}</select></label></div></div>${q("history-table",["\u4E1A\u52A1\u7C7B\u578B","\u4EA7\u54C1\u4E0E\u89C4\u683C","\u53D8\u52A8\u5185\u5BB9","\u8D27\u4F4D","\u5B9E\u9645\u53D1\u751F\u65F6\u95F4","\u64CD\u4F5C\u4EBA / \u6765\u6E90","\u64CD\u4F5C"],a)}<div class="panel-footer"><span>\u66F4\u6B63\u4FDD\u7559\u4FEE\u6539\u524D\u540E\u5185\u5BB9\u3001\u4FEE\u6539\u4EBA\u53CA\u65F6\u95F4\u3002</span><span>${e.length} \u6761\u8BB0\u5F55</span></div></section>`}function st(){return O("\u4EA7\u54C1\u4E0E\u8D27\u4F4D","\u7C7B\u522B\u3001\u7C7B\u522B\u540D\u79F0\u548C\u5907\u6CE8\u5206\u522B\u4FDD\u7559\uFF1B\u5305\u88C5\u6570\u91CF\u53D8\u5316\u65F6\u53E6\u5EFA\u89C4\u683C\u3002",N("\u65B0\u589E\u4EA7\u54C1\u89C4\u683C","add-product",{},"button-primary"),"\u57FA\u7840\u8D44\u6599")+`<section class="data-panel"><div class="table-toolbar"><div><h2>\u4EA7\u54C1\u89C4\u683C</h2><p>\u4E24\u5957\u7CFB\u7EDF\u7EF4\u62A4\u540C\u4E00\u5957\u57FA\u7840\u8D44\u6599\u3002</p></div><span class="soft-pill">\u5171\u7528\u57FA\u7840\u8D44\u6599</span></div>${q("catalog-table",["\u4EA7\u54C1\u540D\u79F0","\u5546\u54C1\u7C7B\u522B","\u7C7B\u522B\u540D\u79F0","\u89C4\u683C","\u6BCF\u4EF6\u4E2A\u6570","\u5907\u6CE8","\u8D27\u4F4D","\u64CD\u4F5C"],t.products.map(e=>`<tr><td><strong>${c(e.name)}</strong></td><td>${c(e.category||"\u2014")}</td><td>${c(e.categoryName||"\u2014")}</td><td>${c(e.spec)}</td><td>${e.perCase} \u4E2A / \u4EF6</td><td class="catalog-note">${c(e.note||"\u2014")}</td><td>${e.locations.length} \u4E2A</td><td>${A("\u65B0\u589E\u8D27\u4F4D","add-location",{product:e.id})}</td></tr>`).join(""))}</section>`}function at(){return O("\u5458\u5DE5\u8D26\u53F7","\u7BA1\u7406\u5458\u7CFB\u7EDF\u7EF4\u62A4\u5458\u5DE5\u8D26\u53F7\uFF1B\u7BA1\u7406\u5458\u4E0E\u5458\u5DE5\u4F7F\u7528\u72EC\u7ACB\u5165\u53E3\u3002",N("\u65B0\u589E\u5458\u5DE5\u8D26\u53F7","add-user",{},"button-dark"),"\u7BA1\u7406\u5458\u4E13\u5C5E")+`<section class="data-panel"><div class="table-toolbar"><div><h2>\u8D26\u53F7\u5217\u8868</h2><p>\u65B0\u5EFA\u6F14\u793A\u8D26\u53F7\u7684\u5BC6\u7801\u4E3A demo123\u3002</p></div><span class="soft-pill">\u5458\u5DE5\u7CFB\u7EDF\u8D26\u53F7</span></div>${q("accounts-table",["\u5458\u5DE5","\u767B\u5F55\u8D26\u53F7","\u72B6\u6001","\u521B\u5EFA\u65E5\u671F","\u64CD\u4F5C"],t.users.map(e=>`<tr><td><strong>${c(e.name)}</strong></td><td>${c(e.account)}</td><td><span class="status-pill ${e.status==="\u542F\u7528"?"status-active":"status-inactive"}">${e.status}</span></td><td>${c(e.createdAt)}</td><td>${A(e.status==="\u542F\u7528"?"\u505C\u7528\u8D26\u53F7":"\u542F\u7528\u8D26\u53F7","toggle-user",{user:e.id})}</td></tr>`).join(""))}</section>`}function ot(){let e=t.logs.filter(l=>r()||l.system==="\u5458\u5DE5\u7CFB\u7EDF"),a=l=>{var d;return l.account||(l.system==="\u7BA1\u7406\u5458\u7CFB\u7EDF"?"admin01":((d=t.users.find(m=>m.name===l.actor))==null?void 0:d.account)||"\u2014")},s=e.filter(l=>(!r()||t.logSystem==="\u5168\u90E8\u7CFB\u7EDF"||l.system===t.logSystem)&&(t.logActor==="\u5168\u90E8\u64CD\u4F5C\u4EBA"||l.actor===t.logActor)&&`${l.action} ${l.actor} ${a(l)}`.toLowerCase().includes(t.logQuery.toLowerCase())),o=[...new Set(e.map(l=>l.actor))],i=`<div class="filters log-filters"><label class="search-field"><span class="sr-only">\u641C\u7D22\u64CD\u4F5C\u5185\u5BB9\u6216\u8D26\u53F7</span><input data-filter="logQuery" value="${c(t.logQuery)}" placeholder="\u641C\u7D22\u64CD\u4F5C\u5185\u5BB9\u6216\u8D26\u53F7"></label>${r()?`<label><span class="sr-only">\u7B5B\u9009\u65E5\u5FD7\u6765\u6E90\u7CFB\u7EDF</span><select data-filter="logSystem">${j(["\u5168\u90E8\u7CFB\u7EDF","\u5458\u5DE5\u7CFB\u7EDF","\u7BA1\u7406\u5458\u7CFB\u7EDF"],t.logSystem)}</select></label>`:""}<label><span class="sr-only">\u7B5B\u9009\u64CD\u4F5C\u4EBA</span><select data-filter="logActor">${j(["\u5168\u90E8\u64CD\u4F5C\u4EBA",...o],t.logActor)}</select></label></div>`;return O("\u7CFB\u7EDF\u64CD\u4F5C\u65E5\u5FD7",r()?"\u67E5\u770B\u7BA1\u7406\u5458\u548C\u5458\u5DE5\u4E24\u7AEF\u7684\u767B\u5F55\u53CA\u64CD\u4F5C\u8BB0\u5F55\uFF0C\u53EF\u6309\u6765\u6E90\u7CFB\u7EDF\u3001\u64CD\u4F5C\u4EBA\u53CA\u8D26\u53F7\u67E5\u8BE2\u3002":"\u67E5\u770B\u5458\u5DE5\u7AEF\u7684\u767B\u5F55\u53CA\u64CD\u4F5C\u8BB0\u5F55\uFF0C\u53EF\u6309\u64CD\u4F5C\u4EBA\u53CA\u8D26\u53F7\u67E5\u8BE2\u3002","",r()?"\u7BA1\u7406\u5458 \xB7 \u5168\u90E8\u7CFB\u7EDF\u65E5\u5FD7":"\u5458\u5DE5\u7AEF\u65E5\u5FD7")+`<section class="data-panel"><div class="table-toolbar"><div><h2>${r()?"\u5168\u90E8\u7CFB\u7EDF\u64CD\u4F5C\u8BB0\u5F55":"\u5458\u5DE5\u7CFB\u7EDF\u64CD\u4F5C\u8BB0\u5F55"}</h2><p>${s.length} \u6761\u7B26\u5408\u6761\u4EF6\u7684\u8BB0\u5F55\uFF0C\u5747\u6CE8\u660E\u6765\u6E90\u7CFB\u7EDF\u3002</p></div>${i}</div>${q("system-log-table",["\u64CD\u4F5C\u5185\u5BB9","\u64CD\u4F5C\u4EBA / \u8D26\u53F7","\u6765\u6E90\u7CFB\u7EDF","\u64CD\u4F5C\u65F6\u95F4"],s.map(l=>`<tr><td><strong>${c(l.action)}</strong></td><td><strong>${c(l.actor)}</strong><small>${c(a(l))}</small></td><td>${c(l.system)}</td><td>${c(C(l.time))}</td></tr>`).join(""))}</section>`}function nt(){return'<section class="import-closed"><p class="eyebrow">\u521D\u59CB\u5316\u5DF2\u5B8C\u6210</p><h2>\u521D\u59CB\u5E93\u5B58 Excel \u5BFC\u5165\u5DF2\u5173\u95ED</h2><p>\u5E93\u5B58\u624B\u5DE5\u767B\u8BB0\u7EE7\u7EED\u901A\u8FC7\u5165\u5E93\u3001\u51FA\u5E93\u3001\u79FB\u52A8\u8D27\u4F4D\u548C\u62C6\u4EF6\u529E\u7406\u3002</p><span class="soft-pill">\u7BA1\u7406\u5458\u7CFB\u7EDF\u4E13\u5C5E\u529F\u80FD</span></section>'}function it(){let e=t.importRows.length&&t.importRows.every(a=>a.status!=="pending")&&t.importRows.some(a=>a.status==="confirmed");return O("\u521D\u59CB\u5E93\u5B58\u5BFC\u5165","\u9996\u6B21\u624B\u5DE5\u5F55\u5165\u4F7F\u7528\u5165\u5E93\uFF1BExcel \u9700\u9010\u884C\u6838\u5BF9\u540E\u5BFC\u5165\uFF0C\u521D\u59CB\u5316\u5B8C\u6210\u540E\u5173\u95ED\u3002",t.initialized?"":N("\u786E\u8BA4\u5B8C\u6210\u521D\u59CB\u5316","finish-initial",{},"button-dark"),"\u7BA1\u7406\u5458\u4E13\u5C5E \xB7 \u521D\u59CB\u5316\u524D\u5F00\u653E")+(t.initialized?nt():`<section class="import-upload-panel"><div class="import-upload-copy"><p class="eyebrow">\u7B2C\u4E00\u6B65 \xB7 \u9009\u62E9\u6587\u4EF6</p><h2>\u5E93\u5B58\u6A21\u677F\u5BFC\u5165\u6D41\u7A0B</h2><p>\u5546\u54C1\u7C7B\u522B\u3001\u7C7B\u522B\u540D\u79F0\u548C\u5907\u6CE8\u5206\u522B\u4FDD\u7559\uFF1B\u7591\u4F3C\u91CD\u590D\u884C\u4E0D\u81EA\u52A8\u7D2F\u52A0\u3002</p></div><div class="upload-control"><label class="button button-outline file-button">\u9009\u62E9 Excel \u6587\u4EF6<input data-upload="excel" type="file" accept=".xlsx,.xls,.csv"></label><span class="file-name">${c(t.filename||"\u5C1A\u672A\u9009\u62E9\u6587\u4EF6")}</span>${A("\u8F7D\u5165\u6F14\u793A\u9884\u89C8","load-preview")}</div><p class="prototype-note">\u9759\u6001\u539F\u578B\u53EA\u5C55\u793A\u6587\u4EF6\u540D\uFF1B\u4E0B\u65B9\u4F7F\u7528\u6A21\u62DF\u6570\u636E\u6F14\u793A\u6838\u5BF9\u8FC7\u7A0B\uFF0C\u4E0D\u89E3\u6790\u6216\u4FEE\u6539 Excel \u6587\u4EF6\u3002</p></section>${t.importRows.length?`<section class="data-panel"><div class="table-toolbar"><div><p class="eyebrow">\u7B2C\u4E8C\u6B65 \xB7 \u9010\u884C\u6838\u5BF9</p><h2>\u5BFC\u5165\u9884\u89C8</h2></div><span class="status-pill ${e?"status-active":"status-warning"}">${e?"\u53EF\u63D0\u4EA4\u6F14\u793A\u6570\u636E":`${t.importRows.filter(a=>a.status==="pending").length} \u884C\u5F85\u5904\u7406`}</span></div>${q("import-table",["\u539F\u884C\u53F7","\u4EA7\u54C1\u540D\u79F0","\u5546\u54C1\u7C7B\u522B","\u7C7B\u522B\u540D\u79F0","\u5907\u6CE8","\u89C4\u683C / \u6BCF\u4EF6\u4E2A\u6570","\u4ED3\u5E93 / \u8D27\u4F4D","\u5F53\u524D\u5E93\u5B58","\u6838\u5BF9"],t.importRows.map(a=>`<tr class="${a.status==="excluded"?"import-row-excluded":""}"><td>${a.rowNumber}</td><td>${c(a.name)}</td><td>${c(a.category)}</td><td>${c(a.categoryName)}</td><td>${c(a.note)}</td><td>${c(a.spec)}<small>${a.perCase} \u4E2A / \u4EF6</small></td><td>${c(a.warehouse)}<small>${c(a.spot)}</small></td><td>${w(a.cases,a.loose)}</td><td>${a.status==="pending"?A(a.duplicate?"\u6392\u9664\u7591\u4F3C\u91CD\u590D":"\u786E\u8BA4\u6B64\u884C","review-import",{row:a.id}):`<span class="status-pill ${a.status==="confirmed"?"status-active":"status-inactive"}">${a.status==="confirmed"?"\u5DF2\u6838\u5BF9":"\u5DF2\u6392\u9664"}</span>`}</td></tr>`).join(""))}<div class="import-submit-row"><p>\u6F14\u793A\u5BFC\u5165\u4F1A\u66FF\u6362\u672C\u6B21\u4F53\u9A8C\u4E2D\u7684\u521D\u59CB\u5E93\u5B58\u3002</p><button class="button button-primary" type="button" data-action="submit-import" ${e?"":"disabled"}>\u786E\u8BA4\u5BFC\u5165\u6F14\u793A\u6570\u636E</button></div></section>`:""}`)}function h(){let e=document.activeElement,a=e==null?void 0:e.dataset.filter,s=e==null?void 0:e.selectionStart;if(t.screen==="portal")n.innerHTML=gt();else if(t.screen==="login")n.innerHTML=x();else{let o={inventory:_,history:et,catalog:st,accounts:at,import:it,systemLogs:ot};!r()&&["accounts","import"].includes(t.page)&&(t.page="inventory"),n.innerHTML=`<div class="app-shell">${H()}<div class="main-column"><header class="app-topbar">${N("\u83DC\u5355","menu",{},"mobile-menu-button")}<div class="breadcrumb"><span>${p()}</span><span class="crumb-divider">/</span><strong>${g[t.page]}</strong></div><div class="topbar-right"><span class="demo-pill">\u6F14\u793A\u6570\u636E \xB7 \u672C\u5730\u6709\u6548</span><span class="topbar-date">${C(k()).slice(0,10)}</span><span class="avatar topbar-avatar ${r()?"avatar-admin":""}">${c(t.actor[0])}</span></div></header><main class="page-content">${o[t.page]()}</main></div></div><div class="toast-message" role="status" hidden></div>${t.modal?rt():""}`}for(let o of n.querySelectorAll("select[data-filter]"))o.value=t[o.dataset.filter];if(t.modal)for(let o of n.querySelectorAll('[role="dialog"] select[name]')){let i=t.modal.values[o.name];i!==void 0&&(o.value=String(i))}if(a){let o=n.querySelector(`[data-filter="${a}"]`);o==null||o.focus(),(o==null?void 0:o.type)==="text"&&s!==null&&o.setSelectionRange(s,s)}}function J(){return t.products.map(e=>({value:e.id,label:`${e.name} \xB7 ${e.spec}`}))}function rt(){var m;let e=t.modal,a=e.values,s="",o="",i="",l="\u4FDD\u5B58",d="";if(e.type==="transaction"){let u=v(t.products,a.productId),f=(u==null?void 0:u.locations)||[],E=f.find(b=>b.id===a.locationId);if(s=`\u767B\u8BB0${e.operation}`,o="\u63D0\u4EA4\u540E\u66F4\u65B0\u6F14\u793A\u5E93\u5B58\uFF0C\u5E76\u8BB0\u5F55\u6765\u6E90\u7CFB\u7EDF\u3002",l="\u786E\u8BA4\u767B\u8BB0",i=D("\u4EA7\u54C1\u89C4\u683C","productId",J(),a.productId)+D(e.operation==="\u79FB\u52A8\u8D27\u4F4D"?"\u539F\u8D27\u4F4D":"\u8D27\u4F4D","locationId",f.map(b=>({value:b.id,label:`${b.warehouse} \xB7 ${b.spot}\uFF08${w(b.cases,b.loose)}\uFF09`})),a.locationId),e.operation==="\u79FB\u52A8\u8D27\u4F4D"){let b=f.filter(R=>R.id!==a.locationId);i+=D("\u76EE\u6807\u8D27\u4F4D","targetLocationId",b.length?b.map(R=>({value:R.id,label:`${R.warehouse} \xB7 ${R.spot}`})):[{value:"",label:"\u8BF7\u5148\u65B0\u589E\u53E6\u4E00\u4E2A\u8D27\u4F4D"}],a.targetLocationId),b.length||(d="disabled")}i+=e.operation==="\u62C6\u4EF6"?$("\u62C6\u5F00\u4EF6\u6570","cases",a.cases,"number",'min="1" step="1" required')+`<div class="calculation-preview"><span>\u62C6\u4EF6\u9884\u89C8</span><strong data-split-preview>${Number(a.cases||0)} \u4EF6 \u2192 \u589E\u52A0 ${Number(a.cases||0)*((u==null?void 0:u.perCase)||0)} \u4E2A\u6563\u4E2A</strong><small>\u6BCF\u4EF6 ${(u==null?void 0:u.perCase)||0} \u4E2A\uFF0C\u4E0D\u81EA\u52A8\u6298\u56DE\u6574\u4EF6\u3002</small></div>`:`<div class="form-two-column">${$("\u6574\u4EF6\u6570","cases",a.cases,"number",'min="0" step="1"')}${$("\u6563\u4E2A\u6570","loose",a.loose,"number",'min="0" step="1"')}</div>`,i+=`<p class="available-note">\u5F53\u524D\u8D27\u4F4D\u53EF\u7528\uFF1A${w(E==null?void 0:E.cases,E==null?void 0:E.loose)}\u3002</p>`+$("\u5B9E\u9645\u53D1\u751F\u65F6\u95F4","occurredAt",a.occurredAt,"datetime-local","required")+$("\u5907\u6CE8\uFF08\u53EF\u9009\uFF09","note",a.note)}else if(e.type==="correction"){let u=t.records.find(f=>f.id===e.recordId);s="\u66F4\u6B63\u5E93\u5B58\u4E1A\u52A1\u8BB0\u5F55",o=`${(m=v(t.products,u.productId))==null?void 0:m.name} \xB7 ${u.type} \xB7 \u66F4\u6B63\u540E\u91CD\u65B0\u6821\u9A8C\u5E93\u5B58`,l="\u4FDD\u5B58\u66F4\u6B63",i=`<p class="available-note">\u539F\u8BB0\u5F55\uFF1A${c(P(u,t.products))}\uFF1B${c(u.note||"\u65E0\u5907\u6CE8")}</p>`+(u.kind==="split"?$("\u62C6\u5F00\u4EF6\u6570","cases",a.cases,"number",'min="1" step="1" required'):`<div class="form-two-column">${$("\u6574\u4EF6\u6570","cases",a.cases,"number",'min="0" step="1"')}${$("\u6563\u4E2A\u6570","loose",a.loose,"number",'min="0" step="1"')}</div>`)+$("\u5B9E\u9645\u53D1\u751F\u65F6\u95F4","occurredAt",a.occurredAt,"datetime-local","required")+$("\u5907\u6CE8","note",a.note)}else if(e.type==="add-product")s="\u65B0\u589E\u4EA7\u54C1\u89C4\u683C",o="\u5546\u54C1\u7C7B\u522B\u3001\u7C7B\u522B\u540D\u79F0\u548C\u5907\u6CE8\u5206\u522B\u4FDD\u5B58\u3002",l="\u4FDD\u5B58\u89C4\u683C",i=$("\u4EA7\u54C1\u540D\u79F0","name",a.name,"text","required")+$("\u89C4\u683C\u540D\u79F0","spec",a.spec,"text","required")+`<div class="form-two-column">${$("\u5546\u54C1\u7C7B\u522B","category",a.category)}${$("\u7C7B\u522B\u540D\u79F0","categoryName",a.categoryName)}</div>`+$("\u5907\u6CE8","note",a.note)+D("\u6BCF\u4EF6\u4E2A\u6570","perCase",[2,4,6].map(u=>({value:u,label:`${u} \u4E2A / \u4EF6`})),a.perCase)+$("\u4ED3\u5E93","warehouse",a.warehouse,"text","required")+$("\u8D27\u4F4D","spot",a.spot,"text","required");else if(e.type==="add-location")s="\u65B0\u589E\u8D27\u4F4D",o="\u4E3A\u73B0\u6709\u89C4\u683C\u589E\u52A0\u8D27\u4F4D\uFF0C\u5E93\u5B58\u4ECE 0 \u4EF6 0 \u4E2A\u5F00\u59CB\u3002",i=D("\u4EA7\u54C1\u89C4\u683C","productId",J(),a.productId)+$("\u4ED3\u5E93","warehouse",a.warehouse,"text","required")+$("\u8D27\u4F4D\u540D\u79F0","spot",a.spot,"text","required");else if(e.type==="add-user")s="\u65B0\u589E\u5458\u5DE5\u8D26\u53F7",o="\u6B64\u8D26\u53F7\u4EC5\u7528\u4E8E\u5458\u5DE5\u7CFB\u7EDF\u3002\u6F14\u793A\u5BC6\u7801\u4E3A demo123\u3002",i=$("\u5458\u5DE5\u59D3\u540D","name",a.name,"text","required")+$("\u767B\u5F55\u8D26\u53F7","account",a.account,"text","required");else if(e.type==="finish-initial")s="\u786E\u8BA4\u5B8C\u6210\u521D\u59CB\u5316",o="\u5B8C\u6210\u540E\u5173\u95ED Excel \u521D\u59CB\u5E93\u5B58\u5BFC\u5165\uFF0C\u5165\u5E93\u7B49\u65E5\u5E38\u64CD\u4F5C\u7EE7\u7EED\u4F7F\u7528\u3002",l="\u786E\u8BA4\u5B8C\u6210",i="<p>\u8BF7\u6838\u5BF9\u6240\u6709\u89C4\u683C\u53CA\u8D27\u4F4D\u5E93\u5B58\u3002\u624B\u5DE5\u5F55\u5165\u901A\u8FC7\u5165\u5E93\u529E\u7406\uFF1B\u672A\u63D0\u4EA4\u7684 Excel \u9884\u89C8\u4E0D\u4F1A\u5199\u5165\u5E93\u5B58\u3002</p>";else if(e.type==="record-history"){let u=t.records.find(f=>f.id===e.recordId);s="\u4FEE\u6539\u8BB0\u5F55",o="\u539F\u4E1A\u52A1\u4FDD\u7559\uFF0C\u4FEE\u6539\u524D\u540E\u5185\u5BB9\u72EC\u7ACB\u8BB0\u5F55\u3002",i=u.editHistory.map(f=>`<article class="audit-entry"><strong>${c(f.by)} \xB7 ${c(f.system)} \xB7 ${c(C(f.at))}</strong><p>\u4FEE\u6539\u524D\uFF1A${c(f.before)}</p><p>\u4FEE\u6539\u540E\uFF1A${c(f.after)}</p></article>`).join("")}return`<div class="modal-backdrop" data-backdrop><section class="modal" role="dialog" aria-modal="true" aria-label="${c(s)}"><div class="modal-header"><div><h2>${c(s)}</h2><p>${c(o)}</p></div>${N("\u5173\u95ED","close-modal",{},"button-quiet")}</div>${e.type==="record-history"?`<div class="modal-form">${i}</div>`:`<form data-form="modal" class="form-stack modal-form">${i}<p class="form-error" role="alert" hidden></p><div class="modal-actions">${N("\u53D6\u6D88","close-modal",{},"button-quiet")}<button type="submit" class="button button-primary" ${d}>${l}</button></div></form>`}</section></div>`}function ct(e,a={}){var l,d,m;if(["add-user","finish-initial"].includes(e)&&!r())return;let s=v(t.products,a.product||((l=t.products[0])==null?void 0:l.id)),o=(s==null?void 0:s.locations.find(u=>u.id===a.location))||(s==null?void 0:s.locations[0]),i={productId:(s==null?void 0:s.id)||"",locationId:(o==null?void 0:o.id)||"",targetLocationId:((d=s==null?void 0:s.locations.find(u=>u.id!==(o==null?void 0:o.id)))==null?void 0:d.id)||"",cases:"",loose:"",occurredAt:k(),note:""};if(e==="correction"){let u=t.records.find(f=>f.id===a.record);if(!u||u.kind==="init")return;i={cases:u.kind==="split"?u.splitCases:u.cases,loose:u.loose,occurredAt:u.occurredAt,note:u.note}}e==="add-product"&&(i={name:"",spec:"",category:"",categoryName:"",note:"",perCase:4,warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:""}),e==="add-location"&&(i={productId:(s==null?void 0:s.id)||"",warehouse:"",spot:""}),e==="add-user"&&(i={name:"",account:""}),t.modal={type:e,values:i,operation:a.operation,recordId:a.record,productId:s==null?void 0:s.id,locationId:o==null?void 0:o.id},h(),(m=n.querySelector('[role="dialog"] input, [role="dialog"] select, [role="dialog"] button'))==null||m.focus()}function lt(e,a){let s=v(t.products,e.productId);if(!s)return"\u8BF7\u5148\u9009\u62E9\u4EA7\u54C1\u89C4\u683C\u3002";let o=S(t.products,s.id,e.locationId);if(!o)return"\u8BF7\u9009\u62E9\u6709\u6548\u8D27\u4F4D\u3002";let i=Number(e.cases||0),l=Number(e.loose||0);if(![i,l].every(u=>Number.isInteger(u)&&u>=0))return"\u6570\u91CF\u5FC5\u987B\u662F\u975E\u8D1F\u6574\u6570\u3002";if(!e.occurredAt||Number.isNaN(new Date(e.occurredAt).getTime()))return"\u8BF7\u586B\u5199\u5B9E\u9645\u53D1\u751F\u65F6\u95F4\u3002";let d={id:I("record"),productId:s.id,locationId:o.id,cases:i,loose:l,occurredAt:e.occurredAt,createdAt:k(),actor:t.actor,sourceSystem:p(),note:e.note.trim(),editHistory:[]};if(a!=="\u62C6\u4EF6"&&i+l===0)return"\u6574\u4EF6\u4E0E\u6563\u4E2A\u81F3\u5C11\u4E00\u9879\u5927\u4E8E 0\u3002";if(a==="\u5165\u5E93")d={...d,kind:"in",type:a};else if(a==="\u51FA\u5E93")d={...d,kind:"out",type:a};else if(a==="\u79FB\u52A8\u8D27\u4F4D"){if(o.id===e.targetLocationId||!S(t.products,s.id,e.targetLocationId))return"\u8BF7\u9009\u62E9\u4E0D\u540C\u7684\u6709\u6548\u76EE\u6807\u8D27\u4F4D\u3002";d={...d,kind:"move",type:a,fromLocationId:o.id,toLocationId:e.targetLocationId}}else if(a==="\u62C6\u4EF6"){if(!Number.isInteger(i)||i<=0)return"\u62C6\u5F00\u4EF6\u6570\u5FC5\u987B\u662F\u5927\u4E8E 0 \u7684\u6574\u6570\u3002";d={...d,kind:"split",type:a,cases:0,loose:0,splitCases:i,perCase:s.perCase}}else return"\u65E0\u6548\u4E1A\u52A1\u7C7B\u578B\u3002";let m=z(t.products,d);return m.error?`\u8BE5\u8D27\u4F4D\u5E93\u5B58\u4E0D\u8DB3\u3002\u5F53\u524D\u53EF\u7528\uFF1A${w(o.cases,o.loose)}\u3002`:(t.products=m.products,t.records.unshift(d),y(`\u767B\u8BB0${a}`),"")}function dt(e,a){let s=t.records.find(f=>f.id===a);if(!s||s.kind==="init")return"\u627E\u4E0D\u5230\u53EF\u66F4\u6B63\u7684\u4E1A\u52A1\u8BB0\u5F55\u3002";let o=Number(e.cases||0),i=Number(e.loose||0);if(![o,i].every(f=>Number.isInteger(f)&&f>=0)||(s.kind==="split"?o<=0:o+i<=0))return"\u8BF7\u8F93\u5165\u6709\u6548\u7684\u975E\u8D1F\u6574\u6570\u6570\u91CF\uFF0C\u53D8\u52A8\u4E0D\u80FD\u4E3A\u96F6\u3002";if(!e.occurredAt||Number.isNaN(new Date(e.occurredAt).getTime()))return"\u8BF7\u586B\u5199\u5B9E\u9645\u53D1\u751F\u65F6\u95F4\u3002";let l=z(t.products,s,-1);if(l.error)return l.error;let d={...s,cases:s.kind==="split"?0:o,loose:s.kind==="split"?0:i,splitCases:s.kind==="split"?o:s.splitCases,occurredAt:e.occurredAt,note:e.note.trim()},m=z(l.products,d);if(m.error)return m.error;let u=f=>`${P(f,t.products)}\uFF1B${C(f.occurredAt)}\uFF1B${f.note||"\u65E0\u5907\u6CE8"}`;return d.editHistory=[...s.editHistory||[],{at:k(),by:t.actor,system:p(),before:u(s),after:u(d)}],t.products=m.products,t.records=t.records.map(f=>f.id===a?d:f),y("\u66F4\u6B63\u5E93\u5B58\u4E1A\u52A1\u8BB0\u5F55"),""}function ut(e){var s,o,i,l,d;let a=t.modal;if(!a)return"";if(a.type==="transaction")return lt(e,a.operation);if(a.type==="correction")return dt(e,a.recordId);if(a.type==="add-product"){for(let m of["name","spec","warehouse","spot"])if(!((s=e[m])!=null&&s.trim()))return"\u8BF7\u586B\u5199\u4EA7\u54C1\u540D\u79F0\u3001\u89C4\u683C\u3001\u4ED3\u5E93\u53CA\u8D27\u4F4D\u3002";if(t.products.some(m=>m.name===e.name.trim()&&m.spec===e.spec.trim()))return"\u8BE5\u4EA7\u54C1\u89C4\u683C\u5DF2\u5B58\u5728\uFF0C\u8BF7\u65B0\u589E\u8D27\u4F4D\u6216\u4F7F\u7528\u4E0D\u540C\u89C4\u683C\u3002";if(![2,4,6].includes(Number(e.perCase)))return"\u8BF7\u9009\u62E9\u6709\u6548\u7684\u6BCF\u4EF6\u4E2A\u6570\u3002";t.products.push({id:I("sku"),name:e.name.trim(),spec:e.spec.trim(),category:e.category.trim(),categoryName:e.categoryName.trim(),note:e.note.trim(),perCase:Number(e.perCase),locations:[{id:I("location"),warehouse:e.warehouse.trim(),spot:e.spot.trim(),cases:0,loose:0}]}),y("\u65B0\u589E\u4EA7\u54C1\u89C4\u683C\u4E0E\u8D27\u4F4D")}else if(a.type==="add-location"){let m=v(t.products,e.productId);if(!m||!((o=e.warehouse)!=null&&o.trim())||!((i=e.spot)!=null&&i.trim()))return"\u8BF7\u9009\u62E9\u89C4\u683C\u5E76\u586B\u5199\u4ED3\u5E93\u3001\u8D27\u4F4D\u3002";if(m.locations.some(u=>u.warehouse===e.warehouse.trim()&&u.spot.toLowerCase()===e.spot.trim().toLowerCase()))return"\u8BE5\u89C4\u683C\u5DF2\u7ECF\u5B58\u5728\u8FD9\u4E2A\u8D27\u4F4D\u3002";m.locations.push({id:I("location"),warehouse:e.warehouse.trim(),spot:e.spot.trim(),cases:0,loose:0}),y("\u65B0\u589E\u8D27\u4F4D")}else if(a.type==="add-user"){if(!r())return"\u8BF7\u4F7F\u7528\u7BA1\u7406\u5458\u7CFB\u7EDF\u3002";if(!((l=e.name)!=null&&l.trim())||!((d=e.account)!=null&&d.trim()))return"\u8BF7\u586B\u5199\u5458\u5DE5\u59D3\u540D\u548C\u8D26\u53F7\u3002";if(e.account.trim().toLowerCase()==="admin01"||t.users.some(m=>m.account.toLowerCase()===e.account.trim().toLowerCase()))return"\u8BE5\u8D26\u53F7\u5DF2\u5B58\u5728\u6216\u5C5E\u4E8E\u7BA1\u7406\u5458\u3002";t.users.unshift({id:I("user"),name:e.name.trim(),account:e.account.trim(),status:"\u542F\u7528",createdAt:k().slice(0,10)}),y("\u65B0\u589E\u5458\u5DE5\u8D26\u53F7")}else if(a.type==="finish-initial"){if(!r())return"\u8BF7\u4F7F\u7528\u7BA1\u7406\u5458\u7CFB\u7EDF\u3002";t.initialized=!0,y("\u786E\u8BA4\u5B8C\u6210\u5E93\u5B58\u521D\u59CB\u5316")}return""}function pt(){!r()||t.initialized||(t.importRows=[{id:"import-1",rowNumber:2,name:"\u793A\u4F8B\u5546\u54C1 A",category:"\u7C7B\u522B\u793A\u4F8B A",categoryName:"\u7C7B\u522B\u540D\u79F0 A",note:"\u539F\u884C\u5907\u6CE8",spec:"\u6807\u51C6\u89C4\u683C",perCase:4,warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:"A\u533A \xB7 01\u67B6",cases:3,loose:1,duplicate:!1,status:"pending"},{id:"import-2",rowNumber:3,name:"\u793A\u4F8B\u5546\u54C1 B",category:"\u7C7B\u522B\u793A\u4F8B B",categoryName:"\u7C7B\u522B\u540D\u79F0 B",note:"\u5206\u522B\u4FDD\u7559",spec:"\u5C0F\u5305\u88C5",perCase:2,warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:"A\u533A \xB7 02\u67B6",cases:8,loose:0,duplicate:!1,status:"pending"},{id:"import-3",rowNumber:4,name:"\u793A\u4F8B\u5546\u54C1 A",category:"\u7C7B\u522B\u793A\u4F8B A",categoryName:"\u7C7B\u522B\u540D\u79F0 A",note:"\u7591\u4F3C\u91CD\u590D\u884C",spec:"\u6807\u51C6\u89C4\u683C",perCase:4,warehouse:"\u4E00\u53F7\u4ED3\u5E93",spot:"A\u533A \xB7 01\u67B6",cases:3,loose:1,duplicate:!0,status:"pending"}])}n.addEventListener("click",e=>{if(e.target.matches("[data-backdrop]")){t.modal=null,h();return}let a=e.target.closest("[data-action]");if(!a||!n.contains(a)||a.disabled)return;let s=a.dataset;if(s.action==="select-system")t.system=s.system,t.screen="login";else if(s.action==="portal")t.screen="portal";else if(s.action==="logout")y("\u9000\u51FA\u7CFB\u7EDF"),t.screen="portal",t.mobileOpen=!1,t.modal=null;else{if(t.screen!=="app")return;if(s.action==="navigate"){if(!g[s.page]||!r()&&["accounts","import"].includes(s.page))return;t.page=s.page,t.mobileOpen=!1,t.modal=null,y(`\u67E5\u770B${g[s.page]}`)}else if(s.action==="menu")t.mobileOpen=!t.mobileOpen;else if(s.action==="close-menu")t.mobileOpen=!1;else if(s.action==="expand")t.expanded=t.expanded===s.product?"":s.product;else if(s.action==="type-filter")t.type=s.type;else if(s.action==="close-modal")t.modal=null;else if(["transaction","correction","record-history","add-product","add-location","add-user","finish-initial"].includes(s.action)){if(s.action==="finish-initial"&&t.initialized)return;ct(s.action,s);return}else if(s.action==="toggle-user"&&r()){let o=t.users.find(i=>i.id===s.user);o&&(o.status=o.status==="\u542F\u7528"?"\u505C\u7528":"\u542F\u7528",y("\u8C03\u6574\u5458\u5DE5\u8D26\u53F7\u72B6\u6001"))}else if(s.action==="load-preview")pt();else if(s.action==="review-import"&&r()&&!t.initialized){let o=t.importRows.find(i=>i.id===s.row);o&&(o.status=o.duplicate?"excluded":"confirmed")}else if(s.action==="submit-import"&&r()&&!t.initialized){if(!t.importRows.length||t.importRows.some(i=>i.status==="pending"))return;let o=t.importRows.filter(i=>i.status==="confirmed");if(!o.length)return;t.products=o.map(i=>({id:I("imported"),name:i.name,category:i.category,categoryName:i.categoryName,spec:i.spec,note:i.note,perCase:i.perCase,locations:[{id:I("location"),warehouse:i.warehouse,spot:i.spot,cases:i.cases,loose:i.loose}]})),t.records=t.products.map(i=>({id:I("initial"),kind:"init",type:"\u521D\u59CB\u5E93\u5B58",productId:i.id,locationId:i.locations[0].id,cases:i.locations[0].cases,loose:i.locations[0].loose,actor:t.actor,sourceSystem:p(),occurredAt:k(),createdAt:k(),note:"\u6F14\u793A\u521D\u59CB\u5316\u5BFC\u5165",editHistory:[]})),t.initialized=!0,y("\u5B8C\u6210\u521D\u59CB\u5E93\u5B58\u6F14\u793A\u5BFC\u5165")}}h()}),n.addEventListener("submit",e=>{let a=e.target.closest("form[data-form]");if(!a)return;e.preventDefault();let s=Object.fromEntries(new FormData(a).entries());if(a.dataset.form==="login"){let o=(s.account||"").trim(),i=t.users.find(d=>d.account===o);if(!(s.password==="demo123"&&(r()?o==="admin01":(i==null?void 0:i.status)==="\u542F\u7528"))){T(a,"\u8D26\u53F7\u6216\u5BC6\u7801\u4E0D\u6B63\u786E\u3001\u8D26\u53F7\u5DF2\u505C\u7528\uFF0C\u6216\u4E0D\u5C5E\u4E8E\u5F53\u524D\u7CFB\u7EDF\u3002");return}t.actor=r()?"\u5468\u7BA1\u7406\u5458":i.name,t.account=o,t.screen="app",t.page="inventory",t.logSystem="\u5168\u90E8\u7CFB\u7EDF",t.logActor="\u5168\u90E8\u64CD\u4F5C\u4EBA",t.logQuery="",y("\u767B\u5F55\u7CFB\u7EDF"),h()}else if(a.dataset.form==="modal"&&t.screen==="app"){let o=ut(s);if(o){T(a,o);return}t.modal=null,h(),L("\u5DF2\u4FDD\u5B58\uFF0C\u672C\u6B21\u6F14\u793A\u6570\u636E\u5DF2\u66F4\u65B0\u3002")}});function U(e){var s,o,i,l;let a=e.target;if(a.dataset.filter){t[a.dataset.filter]=a.value,h();return}if(a.dataset.upload){t.filename=((o=(s=a.files)==null?void 0:s[0])==null?void 0:o.name)||"",h();return}if(!(!t.modal||!a.closest('form[data-form="modal"]')||!a.name)){if(t.modal.values[a.name]=a.value,a.tagName==="SELECT"&&t.modal.type==="transaction"&&["productId","locationId"].includes(a.name)){let d=t.modal.values,m=v(t.products,d.productId);a.name==="productId"&&(d.locationId=((i=m==null?void 0:m.locations[0])==null?void 0:i.id)||""),d.targetLocationId=((l=m==null?void 0:m.locations.find(u=>u.id!==d.locationId))==null?void 0:l.id)||"",h()}else if(a.name==="cases"&&t.modal.operation==="\u62C6\u4EF6"){let d=t.modal.values,m=v(t.products,d.productId),u=n.querySelector("[data-split-preview]");u&&(u.textContent=`${Number(d.cases||0)} \u4EF6 \u2192 \u589E\u52A0 ${Number(d.cases||0)*((m==null?void 0:m.perCase)||0)} \u4E2A\u6563\u4E2A`)}}}return n.addEventListener("input",e=>{e.target.tagName!=="SELECT"&&e.target.type!=="file"&&U(e)}),n.addEventListener("change",e=>{(e.target.tagName==="SELECT"||e.target.type==="file")&&U(e)}),n.addEventListener("keydown",e=>{if(e.key==="Escape"&&(t.modal||t.mobileOpen)&&(t.modal=null,t.mobileOpen=!1,h()),e.key!=="Tab"||!t.modal)return;let a=[...n.querySelectorAll('[role="dialog"] button:not([disabled]), [role="dialog"] input, [role="dialog"] select')],s=a[0],o=a[a.length-1];e.shiftKey&&document.activeElement===s&&(e.preventDefault(),o==null||o.focus()),!e.shiftKey&&document.activeElement===o&&(e.preventDefault(),s==null||s.focus())}),h(),{getSnapshot:()=>JSON.parse(JSON.stringify(t))}}tt();})();
+</script>
+</body>
+</html>
