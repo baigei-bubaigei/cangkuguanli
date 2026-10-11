@@ -60,11 +60,11 @@ async function request(path, options = {}) {
   return fetch(`${baseUrl}${path}`, options);
 }
 
-async function login(system, account, password) {
+async function login(system, account, password, claims = {}) {
   return request(`/api/${system}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ account, password }),
+    body: JSON.stringify({ ...claims, account, password }),
   });
 }
 
@@ -184,19 +184,95 @@ test("an existing employee can log in, retain identity after refresh, and log ou
 });
 
 test("employee and administrator sessions cannot cross the independent system boundary", async () => {
-  const employeeResponse = await login("employee", activeEmployee, employeePassword);
-  const employeeCookie = cookieFrom(employeeResponse, "employee_session");
-  const adminFromEmployeeSession = await request("/api/admin/auth/session", {
-    headers: { Cookie: employeeCookie },
+  const forgedAdminQuery = new URLSearchParams({
+    account: adminAccount,
+    displayName: "伪造管理员身份",
+    role: "admin",
+    system: "admin",
+    sourceSystem: "admin",
   });
+  const forgedEmployeeQuery = new URLSearchParams({
+    account: activeEmployee,
+    displayName: "伪造员工身份",
+    role: "employee",
+    system: "employee",
+    sourceSystem: "employee",
+  });
+
+  const anonymousEmployeeSession = await request(
+    `/api/employee/auth/session?${forgedAdminQuery}`,
+  );
+  assert.equal(anonymousEmployeeSession.status, 401);
+
+  const anonymousAdminSession = await request(
+    `/api/admin/auth/session?${forgedEmployeeQuery}`,
+  );
+  assert.equal(anonymousAdminSession.status, 401);
+
+  const employeeResponse = await login("employee", activeEmployee, employeePassword, {
+    accountId: adminAccount,
+    displayName: "伪造员工身份",
+    role: "admin",
+    sourceSystem: "admin",
+    system: "admin",
+  });
+  assert.equal(employeeResponse.status, 200);
+  assert.deepEqual(await employeeResponse.json(), {
+    account: activeEmployee,
+    displayName: "测试员工",
+  });
+  const employeeCookie = cookieFrom(employeeResponse, "employee_session");
+  const employeeSession = await request(
+    `/api/employee/auth/session?${forgedAdminQuery}`,
+    {
+      headers: { Cookie: employeeCookie },
+    },
+  );
+  assert.equal(employeeSession.status, 200);
+  assert.deepEqual(await employeeSession.json(), {
+    account: activeEmployee,
+    displayName: "测试员工",
+  });
+
+  const adminFromEmployeeSession = await request(
+    `/api/admin/auth/session?${forgedAdminQuery}`,
+    {
+      headers: { Cookie: employeeCookie },
+    },
+  );
   assert.equal(adminFromEmployeeSession.status, 401);
 
-  const adminResponse = await login("admin", adminAccount, adminPassword);
-  assert.equal(adminResponse.status, 200);
-  const adminCookie = cookieFrom(adminResponse, "admin_session");
-  const employeeFromAdminSession = await request("/api/employee/auth/session", {
-    headers: { Cookie: adminCookie },
+  const adminResponse = await login("admin", adminAccount, adminPassword, {
+    accountId: activeEmployee,
+    displayName: "伪造管理员身份",
+    role: "employee",
+    sourceSystem: "employee",
+    system: "employee",
   });
+  assert.equal(adminResponse.status, 200);
+  assert.deepEqual(await adminResponse.json(), {
+    account: adminAccount,
+    displayName: "边界测试管理员",
+  });
+  const adminCookie = cookieFrom(adminResponse, "admin_session");
+  const adminSession = await request(
+    `/api/admin/auth/session?${forgedEmployeeQuery}`,
+    {
+      headers: { Cookie: adminCookie },
+    },
+  );
+  assert.equal(adminSession.status, 200);
+  assert.deepEqual(await adminSession.json(), {
+    account: adminAccount,
+    displayName: "边界测试管理员",
+  });
+
+  const employeeFromAdminSession = await request(
+    `/api/employee/auth/session?${forgedEmployeeQuery}`,
+    {
+      headers: { Cookie: adminCookie },
+    },
+  );
   assert.equal(employeeFromAdminSession.status, 401);
 
   await request("/api/employee/auth/session", { method: "DELETE", headers: { Cookie: employeeCookie } });
