@@ -2,8 +2,8 @@
   "name": "cangkuguanli",
   "private": true,
   "workspaces": [
-    "apps/admin",
-    "apps/api"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "dev:admin": "npm run dev --workspace @cangkuguanli/admin",
