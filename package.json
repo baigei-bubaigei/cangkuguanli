@@ -1,0 +1,16 @@
+{
+  "name": "cangkuguanli",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:admin": "npm run dev --workspace @cangkuguanli/admin",
+    "dev:api": "npm run dev --workspace @cangkuguanli/api",
+    "build:admin": "npm run build --workspace @cangkuguanli/admin",
+    "build:api": "npm run build --workspace @cangkuguanli/api",
+    "test:api": "npm run test --workspace @cangkuguanli/api",
+    "db:migrate": "npm run db:migrate --workspace @cangkuguanli/api"
+  }
+}
