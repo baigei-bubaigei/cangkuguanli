@@ -7,10 +7,20 @@ import {
   employeeSessionCookie,
 } from "./employee-auth.js";
 
-export async function hasCatalogSession(request) {
+export async function currentCatalogActor(request) {
   const adminToken = request.cookies.get(adminSessionCookie)?.value;
-  if (adminToken && await currentAdmin(adminToken)) return true;
+  if (adminToken) {
+    const admin = await currentAdmin(adminToken);
+    if (admin) return { account: admin.account, sourceSystem: "admin" };
+  }
 
   const employeeToken = request.cookies.get(employeeSessionCookie)?.value;
-  return Boolean(employeeToken && await currentEmployee(employeeToken));
+  if (!employeeToken) return null;
+
+  const employee = await currentEmployee(employeeToken);
+  return employee ? { account: employee.account, sourceSystem: "employee" } : null;
+}
+
+export async function hasCatalogSession(request) {
+  return Boolean(await currentCatalogActor(request));
 }

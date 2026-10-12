@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import InboundForm from "./InboundForm.jsx";
 import "./inventory-query.css";
 
 export default function InventoryQuery() {
@@ -6,6 +7,7 @@ export default function InventoryQuery() {
   const [status, setStatus] = useState("loading");
   const [query, setQuery] = useState("");
   const [warehouse, setWarehouse] = useState("");
+  const [inboundContext, setInboundContext] = useState(null);
 
   async function loadInventory() {
     setStatus("loading");
@@ -70,6 +72,17 @@ export default function InventoryQuery() {
         </div>
       </div>
 
+      <div className="inventory-query-actions">
+        <button
+          className="button button-dark"
+          type="button"
+          disabled={!inventory.products.length}
+          onClick={() => setInboundContext({})}
+        >
+          登记入库
+        </button>
+      </div>
+
       {status === "loading" ? (
         <div className="inventory-query-state" aria-live="polite">正在读取库存…</div>
       ) : status === "error" ? (
@@ -91,6 +104,7 @@ export default function InventoryQuery() {
                 <th scope="col">货位分布</th>
                 <th scope="col">整件合计</th>
                 <th scope="col">散个合计</th>
+                <th scope="col">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -108,11 +122,33 @@ export default function InventoryQuery() {
                   <td className="inventory-query-quantity">
                     <strong>{product.totalLoose}</strong> 个
                   </td>
+                  <td className="inventory-query-action">
+                    <button
+                      className="inventory-query-inbound-toggle"
+                      type="button"
+                      onClick={() => setInboundContext({ productId: product.id })}
+                    >
+                      入库
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {inboundContext && (
+        <InboundForm
+          products={inventory.products}
+          initialProductId={inboundContext.productId}
+          initialLocationId={inboundContext.locationId}
+          onClose={() => setInboundContext(null)}
+          onSaved={async () => {
+            setInboundContext(null);
+            await loadInventory();
+          }}
+        />
       )}
     </section>
   );

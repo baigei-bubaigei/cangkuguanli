@@ -99,6 +99,17 @@ function requestLocation(location, cookie) {
   });
 }
 
+function requestInbound(transaction, cookie) {
+  return request("/api/inventory/inbound", {
+    method: "POST",
+    headers: {
+      ...(cookie ? { Cookie: cookie } : {}),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(transaction),
+  });
+}
+
 before(async () => {
   const migrations = spawnSync(process.execPath, [migrationCli], {
     cwd: apiDirectory,
@@ -140,6 +151,13 @@ before(async () => {
 after(async () => {
   if (serverProcess && serverProcess.exitCode === null) serverProcess.kill();
   if (pool) {
+    await pool.query(
+      `DELETE FROM inventory_transactions
+        WHERE product_spec_id IN (
+          SELECT id FROM product_specs WHERE product_name = ANY($1::text[])
+        )`,
+      [[...productNames]],
+    );
     await pool.query("DELETE FROM product_specs WHERE product_name = ANY($1::text[])", [[...productNames]]);
     await pool.query(
       "DELETE FROM locations WHERE warehouse_id IN (SELECT id FROM warehouses WHERE name = ANY($1::text[]))",
@@ -276,5 +294,214 @@ test("inventory API preserves empty and zero states and shares cross-location to
   assert.equal(zeroSummary.totalLoose, 0);
   assert.deepEqual(zeroSummary.locations.map(({ cases, loose }) => ({ cases, loose })), [
     { cases: 0, loose: 0 },
+  ]);
+});
+
+test("admin and employee inbound transactions save inventory and account context", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const employeeCookie = await login("employee", employeeAccount);
+  const product = {
+    name: accountPrefix + " 入库测试",
+    category: "木制品",
+    categoryName: "家具",
+    spec: "四个一件",
+    perCase: 4,
+    note: "",
+    warehouse: accountPrefix + " 入库仓库 A",
+    spot: "A 位",
+  };
+  productNames.add(product.name);
+  warehouseNames.add(product.warehouse);
+  const createdResponse = await requestProduct(product, adminCookie);
+  assert.equal(createdResponse.status, 201);
+  const createdProduct = await createdResponse.json();
+
+  const otherProduct = { ...product, name: accountPrefix + " 另一规格", warehouse: accountPrefix + " 入库仓库 B" };
+  productNames.add(otherProduct.name);
+  warehouseNames.add(otherProduct.warehouse);
+  const otherProductResponse = await requestProduct(otherProduct, employeeCookie);
+  assert.equal(otherProductResponse.status, 201);
+  const otherCreatedProduct = await otherProductResponse.json();
+
+  const basePayload = {
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 2,
+    loose: 3,
+    actualOccurredAt: "2026-10-12T07:00:00.000Z",
+  };
+  const anonymousResponse = await requestInbound(basePayload);
+  assert.equal(anonymousResponse.status, 401);
+
+  const invalidPayloads = [
+    { ...basePayload, cases: 0, loose: 0 },
+    { ...basePayload, cases: -1 },
+    { ...basePayload, loose: 1.5 },
+    { ...basePayload, actualOccurredAt: "不是实际时间" },
+  ];
+  for (const payload of invalidPayloads) {
+    const response = await requestInbound(payload, employeeCookie);
+    assert.equal(response.status, 400);
+  }
+
+  const wrongLocationResponse = await requestInbound({
+    ...basePayload,
+    locationId: otherCreatedProduct.locationId,
+  }, adminCookie);
+  assert.equal(wrongLocationResponse.status, 404);
+
+  const noPartialTransactions = await pool.query(
+    `SELECT COUNT(*)::INTEGER AS count
+       FROM inventory_transactions
+      WHERE product_spec_id = $1`,
+    [createdProduct.id],
+  );
+  assert.equal(noPartialTransactions.rows[0].count, 0);
+
+  const overflowProduct = { ...product, name: accountPrefix + " 整数上限", warehouse: accountPrefix + " 入库仓库 C" };
+  productNames.add(overflowProduct.name);
+  warehouseNames.add(overflowProduct.warehouse);
+  const overflowProductResponse = await requestProduct(overflowProduct, adminCookie);
+  assert.equal(overflowProductResponse.status, 201);
+  const overflowCreatedProduct = await overflowProductResponse.json();
+  await pool.query(
+    `UPDATE product_spec_locations
+        SET case_count = 2147483647
+      WHERE product_spec_id = $1 AND location_id = $2`,
+    [overflowCreatedProduct.id, overflowCreatedProduct.locationId],
+  );
+
+  const failedSaveResponse = await requestInbound({
+    productSpecId: overflowCreatedProduct.id,
+    locationId: overflowCreatedProduct.locationId,
+    cases: 1,
+    loose: 0,
+    actualOccurredAt: basePayload.actualOccurredAt,
+  }, employeeCookie);
+  assert.equal(failedSaveResponse.status, 500);
+  const failedInventory = await pool.query(
+    `SELECT case_count, loose_count
+       FROM product_spec_locations
+      WHERE product_spec_id = $1 AND location_id = $2`,
+    [overflowCreatedProduct.id, overflowCreatedProduct.locationId],
+  );
+  assert.deepEqual(failedInventory.rows[0], { case_count: 2147483647, loose_count: 0 });
+  const failedTransaction = await pool.query(
+    "SELECT COUNT(*)::INTEGER AS count FROM inventory_transactions WHERE product_spec_id = $1",
+    [overflowCreatedProduct.id],
+  );
+  assert.equal(failedTransaction.rows[0].count, 0);
+
+  const employeeOccurredAt = "2026-10-12T07:00:00.000Z";
+  const employeeInboundResponse = await requestInbound({
+    ...basePayload,
+    actualOccurredAt: employeeOccurredAt,
+  }, employeeCookie);
+  assert.equal(employeeInboundResponse.status, 201);
+  const employeeInbound = await employeeInboundResponse.json();
+  assert.deepEqual({
+    operationType: employeeInbound.operationType,
+    productSpecId: employeeInbound.productSpecId,
+    locationId: employeeInbound.locationId,
+    cases: employeeInbound.cases,
+    loose: employeeInbound.loose,
+    actualOccurredAt: employeeInbound.actualOccurredAt,
+    actorAccount: employeeInbound.actorAccount,
+    sourceSystem: employeeInbound.sourceSystem,
+    locationCases: employeeInbound.locationCases,
+    locationLoose: employeeInbound.locationLoose,
+  }, {
+    operationType: "inbound",
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 2,
+    loose: 3,
+    actualOccurredAt: employeeOccurredAt,
+    actorAccount: employeeAccount,
+    sourceSystem: "employee",
+    locationCases: 2,
+    locationLoose: 3,
+  });
+
+  const adminOccurredAt = "2026-10-12T07:05:00.000Z";
+  const adminInboundResponse = await requestInbound({
+    ...basePayload,
+    cases: 1,
+    loose: 0,
+    actualOccurredAt: adminOccurredAt,
+  }, adminCookie);
+  assert.equal(adminInboundResponse.status, 201);
+  assert.deepEqual(await adminInboundResponse.json(), {
+    transactionId: (await pool.query(
+      `SELECT id FROM inventory_transactions
+        WHERE product_spec_id = $1 AND source_system = 'admin'`,
+      [createdProduct.id],
+    )).rows[0]?.id?.toString(),
+    operationType: "inbound",
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 1,
+    loose: 0,
+    actualOccurredAt: adminOccurredAt,
+    recordedAt: (await pool.query(
+      `SELECT recorded_at FROM inventory_transactions
+        WHERE product_spec_id = $1 AND source_system = 'admin'`,
+      [createdProduct.id],
+    )).rows[0]?.recorded_at?.toISOString(),
+    actorAccount: adminAccount,
+    sourceSystem: "admin",
+    locationCases: 3,
+    locationLoose: 3,
+  });
+
+  const adminInventoryResponse = await requestInventory(adminCookie);
+  const employeeInventoryResponse = await requestInventory(employeeCookie);
+  assert.equal(adminInventoryResponse.status, 200);
+  assert.equal(employeeInventoryResponse.status, 200);
+  const adminInventory = await adminInventoryResponse.json();
+  const employeeInventory = await employeeInventoryResponse.json();
+  assert.deepEqual(employeeInventory, adminInventory);
+  const savedProduct = adminInventory.products.find((item) => item.id === createdProduct.id);
+  assert.equal(savedProduct.totalCases, 3);
+  assert.equal(savedProduct.totalLoose, 3);
+  assert.deepEqual(savedProduct.locations.map(({ cases, loose }) => ({ cases, loose })), [
+    { cases: 3, loose: 3 },
+  ]);
+
+  const transactionRows = await pool.query(
+    `SELECT operation_type, case_count, loose_count, actual_occurred_at,
+            actor_account, source_system, recorded_at
+       FROM inventory_transactions
+      WHERE product_spec_id = $1
+      ORDER BY id`,
+    [createdProduct.id],
+  );
+  assert.deepEqual(transactionRows.rows.map((row) => ({
+    operationType: row.operation_type,
+    cases: row.case_count,
+    loose: row.loose_count,
+    actualOccurredAt: row.actual_occurred_at.toISOString(),
+    actorAccount: row.actor_account,
+    sourceSystem: row.source_system,
+    recordedAtIsPresent: row.recorded_at instanceof Date,
+  })), [
+    {
+      operationType: "inbound",
+      cases: 2,
+      loose: 3,
+      actualOccurredAt: employeeOccurredAt,
+      actorAccount: employeeAccount,
+      sourceSystem: "employee",
+      recordedAtIsPresent: true,
+    },
+    {
+      operationType: "inbound",
+      cases: 1,
+      loose: 0,
+      actualOccurredAt: adminOccurredAt,
+      actorAccount: adminAccount,
+      sourceSystem: "admin",
+      recordedAtIsPresent: true,
+    },
   ]);
 });
