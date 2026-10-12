@@ -1,0 +1,3 @@
+ALTER TABLE product_spec_locations
+  ADD COLUMN case_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN loose_count INTEGER NOT NULL DEFAULT 0;

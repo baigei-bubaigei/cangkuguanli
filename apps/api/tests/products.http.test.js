@@ -82,6 +82,17 @@ function requestProduct(method, product, cookie) {
   });
 }
 
+function requestLocation(location, cookie) {
+  return request("/api/catalog/products/locations", {
+    method: "POST",
+    headers: {
+      ...(cookie ? { Cookie: cookie } : {}),
+      ...(location ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(location ? { body: JSON.stringify(location) } : {}),
+  });
+}
+
 function visibleFields(products) {
   return products.map(({ name, category, categoryName, spec, perCase, note, warehouse, spot }) => ({
     name, category, categoryName, spec, perCase, note, warehouse, spot,
@@ -227,4 +238,68 @@ test("blank category fields remain separate and item count is limited to 2, 4, o
     },
     blankCategories,
   ]);
+});
+
+test("admin and employee add persisted zero-stock locations to existing specifications", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const employeeCookie = await login("employee", employeeAccount);
+  const product = {
+    name: `${accountPrefix} 货位测试商品`,
+    category: "类别",
+    categoryName: "类别名称",
+    spec: "四个一件",
+    perCase: 4,
+    note: "",
+    warehouse: `${accountPrefix} 原仓库`,
+    spot: "原货位",
+  };
+  productNames.add(product.name);
+  warehouseNames.add(product.warehouse);
+  const createdProductResponse = await requestProduct("POST", product, adminCookie);
+  assert.equal(createdProductResponse.status, 201);
+  const createdProduct = await createdProductResponse.json();
+
+  const employeeLocation = {
+    productSpecId: createdProduct.id,
+    warehouse: `${accountPrefix} 新仓库甲`,
+    spot: "新增货位甲",
+  };
+  warehouseNames.add(employeeLocation.warehouse);
+  const employeeAddedLocationResponse = await requestLocation(employeeLocation, employeeCookie);
+  assert.equal(employeeAddedLocationResponse.status, 201);
+  const employeeAddedLocation = await employeeAddedLocationResponse.json();
+  assert.deepEqual(
+    { warehouse: employeeAddedLocation.warehouse, spot: employeeAddedLocation.spot, cases: employeeAddedLocation.cases, loose: employeeAddedLocation.loose },
+    { warehouse: employeeLocation.warehouse, spot: employeeLocation.spot, cases: 0, loose: 0 },
+  );
+
+  const adminLocation = {
+    productSpecId: createdProduct.id,
+    warehouse: `${accountPrefix} 新仓库乙`,
+    spot: "新增货位乙",
+  };
+  warehouseNames.add(adminLocation.warehouse);
+  const adminAddedLocationResponse = await requestLocation(adminLocation, adminCookie);
+  assert.equal(adminAddedLocationResponse.status, 201);
+  const adminAddedLocation = await adminAddedLocationResponse.json();
+  assert.equal(adminAddedLocation.cases, 0);
+  assert.equal(adminAddedLocation.loose, 0);
+
+  const employeeSeesLocations = await requestProduct("GET", undefined, employeeCookie);
+  assert.equal(employeeSeesLocations.status, 200);
+  const employeeCatalog = await employeeSeesLocations.json();
+  assert.deepEqual(
+    employeeCatalog.filter((item) => item.id === createdProduct.id).map(({ warehouse, spot, cases, loose }) => ({ warehouse, spot, cases, loose })),
+    [
+      { warehouse: product.warehouse, spot: product.spot, cases: 0, loose: 0 },
+      { warehouse: employeeLocation.warehouse, spot: employeeLocation.spot, cases: 0, loose: 0 },
+      { warehouse: adminLocation.warehouse, spot: adminLocation.spot, cases: 0, loose: 0 },
+    ],
+  );
+
+  const duplicateLocationResponse = await requestLocation({ ...employeeLocation, spot: employeeLocation.spot.toLowerCase() }, adminCookie);
+  assert.equal(duplicateLocationResponse.status, 409);
+
+  const missingProductResponse = await requestLocation({ ...employeeLocation, productSpecId: "9223372036854775807" }, adminCookie);
+  assert.equal(missingProductResponse.status, 404);
 });

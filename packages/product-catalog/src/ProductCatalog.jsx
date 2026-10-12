@@ -6,8 +6,11 @@ export default function ProductCatalog() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [locationFormOpen, setLocationFormOpen] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [locationSaveError, setLocationSaveError] = useState("");
   const [pending, setPending] = useState(false);
+  const [locationPending, setLocationPending] = useState(false);
 
   async function loadProducts() {
     setLoading(true);
@@ -56,6 +59,36 @@ export default function ProductCatalog() {
     }
   }
 
+  async function handleSaveLocation(event) {
+    event.preventDefault();
+    setLocationPending(true);
+    setLocationSaveError("");
+
+    const form = new FormData(event.currentTarget);
+    const location = Object.fromEntries(form.entries());
+    try {
+      const response = await fetch("/api/catalog/products/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(location),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setLocationSaveError(result.error || "货位保存失败，请检查后重试。");
+        return;
+      }
+
+      setLocationFormOpen(false);
+      await loadProducts();
+    } catch {
+      setLocationSaveError("暂时无法保存货位，请检查网络后重试。");
+    } finally {
+      setLocationPending(false);
+    }
+  }
+
+  const productOptions = [...new Map(products.map((product) => [product.id, product])).values()];
+
   return (
     <section className="catalog-panel" aria-label="共用产品规格">
       <div className="catalog-toolbar">
@@ -64,9 +97,17 @@ export default function ProductCatalog() {
           <h2>产品规格</h2>
           <p>管理员和员工查看同一份已保存资料。</p>
         </div>
-        <button className="button button-dark" type="button" onClick={() => { setSaveError(""); setFormOpen(true); }}>
-          新增产品规格
-        </button>
+        <div className="catalog-toolbar-actions">
+          <button
+            className="button button-outline"
+            type="button"
+            disabled={loading || productOptions.length === 0}
+            onClick={() => { setLocationSaveError(""); setLocationFormOpen(true); }}
+          >新增货位</button>
+          <button className="button button-dark" type="button" onClick={() => { setSaveError(""); setFormOpen(true); }}>
+            新增产品规格
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -173,6 +214,55 @@ export default function ProductCatalog() {
                 </button>
                 <button className="button button-dark" type="submit" disabled={pending}>
                   {pending ? "正在保存…" : "保存规格"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {locationFormOpen && (
+        <div className="catalog-modal-backdrop">
+          <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="location-dialog-title">
+            <div className="catalog-dialog-heading">
+              <div>
+                <p className="catalog-eyebrow">基础资料</p>
+                <h2 id="location-dialog-title">新增货位</h2>
+              </div>
+              <button
+                className="catalog-close-button"
+                type="button"
+                aria-label="关闭"
+                onClick={() => setLocationFormOpen(false)}
+              >×</button>
+            </div>
+            <p className="catalog-dialog-description">为已有规格增加货位，新货位库存从 0 件 0 个开始。</p>
+            <form className="catalog-form" onSubmit={handleSaveLocation}>
+              <div className="catalog-form-grid">
+                <label className="catalog-field">
+                  <span>产品规格</span>
+                  <select name="productSpecId" defaultValue={productOptions[0]?.id || ""} required>
+                    {productOptions.map((product) => (
+                      <option key={product.id} value={product.id}>{product.name} · {product.spec}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="catalog-field">
+                  <span>仓库</span>
+                  <input name="warehouse" type="text" autoComplete="off" required />
+                </label>
+                <label className="catalog-field">
+                  <span>货位名称</span>
+                  <input name="spot" type="text" autoComplete="off" required />
+                </label>
+              </div>
+              {locationSaveError && <p className="catalog-form-error" role="alert">{locationSaveError}</p>}
+              <div className="catalog-form-actions">
+                <button className="button button-outline" type="button" onClick={() => setLocationFormOpen(false)} disabled={locationPending}>
+                  取消
+                </button>
+                <button className="button button-dark" type="submit" disabled={locationPending}>
+                  {locationPending ? "正在保存…" : "保存货位"}
                 </button>
               </div>
             </form>

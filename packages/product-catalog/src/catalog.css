@@ -2,6 +2,7 @@
 .button-outline:hover:not(:disabled) { background: #f5f8f5; }
 .catalog-panel { margin-top: 22px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .catalog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 21px 24px; border-bottom: 1px solid var(--line); }
+.catalog-toolbar-actions { display: flex; flex-shrink: 0; gap: 9px; }
 .catalog-toolbar h2, .catalog-dialog h2 { margin: 0; color: #26362f; font-size: 18px; font-weight: 650; letter-spacing: -.025em; }
 .catalog-toolbar p:last-child { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .catalog-eyebrow { margin: 0 0 7px; color: #658172; font-size: 10px; font-weight: 700; letter-spacing: .1em; }
@@ -29,7 +30,8 @@
 
 @media (max-width: 760px) {
   .catalog-toolbar { align-items: flex-start; flex-direction: column; padding: 19px 17px; }
-  .catalog-toolbar .button { width: 100%; }
+  .catalog-toolbar-actions { width: 100%; flex-direction: column; }
+  .catalog-toolbar-actions .button { width: 100%; }
   .catalog-state { flex-direction: column; }
   .catalog-modal-backdrop { padding: 12px; }
   .catalog-dialog { max-height: calc(100vh - 24px); padding: 20px 16px; }
