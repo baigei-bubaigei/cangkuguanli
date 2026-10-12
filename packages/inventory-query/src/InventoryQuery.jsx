@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import InboundForm from "./InboundForm.jsx";
 import OutboundForm from "./OutboundForm.jsx";
+import SplitForm from "./SplitForm.jsx";
 import "./inventory-query.css";
 
 export default function InventoryQuery() {
@@ -10,6 +11,7 @@ export default function InventoryQuery() {
   const [warehouse, setWarehouse] = useState("");
   const [inboundContext, setInboundContext] = useState(null);
   const [outboundContext, setOutboundContext] = useState(null);
+  const [splitContext, setSplitContext] = useState(null);
 
   async function loadInventory() {
     setStatus("loading");
@@ -81,6 +83,7 @@ export default function InventoryQuery() {
           disabled={!inventory.products.length}
           onClick={() => {
             setOutboundContext(null);
+            setSplitContext(null);
             setInboundContext({});
           }}
         >
@@ -92,10 +95,23 @@ export default function InventoryQuery() {
           disabled={!inventory.products.length}
           onClick={() => {
             setInboundContext(null);
+            setSplitContext(null);
             setOutboundContext({});
           }}
         >
           登记出库
+        </button>
+        <button
+          className="button button-outline"
+          type="button"
+          disabled={!inventory.products.length}
+          onClick={() => {
+            setInboundContext(null);
+            setOutboundContext(null);
+            setSplitContext({});
+          }}
+        >
+          登记拆件
         </button>
       </div>
 
@@ -144,6 +160,7 @@ export default function InventoryQuery() {
                       type="button"
                       onClick={() => {
                         setOutboundContext(null);
+                        setSplitContext(null);
                         setInboundContext({ productId: product.id });
                       }}
                     >
@@ -154,10 +171,22 @@ export default function InventoryQuery() {
                       type="button"
                       onClick={() => {
                         setInboundContext(null);
+                        setSplitContext(null);
                         setOutboundContext({ productId: product.id });
                       }}
                     >
                       出库
+                    </button>
+                    <button
+                      className="inventory-query-split-toggle"
+                      type="button"
+                      onClick={() => {
+                        setInboundContext(null);
+                        setOutboundContext(null);
+                        setSplitContext({ productId: product.id });
+                      }}
+                    >
+                      拆件
                     </button>
                   </td>
                 </tr>
@@ -187,6 +216,18 @@ export default function InventoryQuery() {
           onClose={() => setOutboundContext(null)}
           onSaved={async () => {
             setOutboundContext(null);
+            await loadInventory();
+          }}
+        />
+      )}
+      {splitContext && (
+        <SplitForm
+          products={inventory.products}
+          initialProductId={splitContext.productId}
+          initialLocationId={splitContext.locationId}
+          onClose={() => setSplitContext(null)}
+          onSaved={async () => {
+            setSplitContext(null);
             await loadInventory();
           }}
         />
