@@ -1,23 +1,8 @@
 import { NextResponse } from "next/server";
-import {
-  adminSessionCookie,
-  currentAdmin,
-} from "../../../../src/auth/admin-auth.js";
-import {
-  currentEmployee,
-  employeeSessionCookie,
-} from "../../../../src/auth/employee-auth.js";
+import { hasCatalogSession } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
 
 export const runtime = "nodejs";
-
-async function hasCatalogSession(request) {
-  const adminToken = request.cookies.get(adminSessionCookie)?.value;
-  if (adminToken && await currentAdmin(adminToken)) return true;
-
-  const employeeToken = request.cookies.get(employeeSessionCookie)?.value;
-  return Boolean(employeeToken && await currentEmployee(employeeToken));
-}
 
 function unauthorized() {
   return NextResponse.json({ error: "需要登录后维护产品规格。" }, {
@@ -40,7 +25,8 @@ function optionalText(value) {
 }
 
 const productSelect = `SELECT p.id, l.id AS location_id, p.product_name, p.category, p.category_name, p.spec,
-                              p.per_case_count, p.note, w.name AS warehouse, l.name AS spot
+                              p.per_case_count, p.note, w.name AS warehouse, l.name AS spot,
+                              sl.case_count, sl.loose_count
                          FROM product_specs p
                          JOIN product_spec_locations sl ON sl.product_spec_id = p.id
                          JOIN locations l ON l.id = sl.location_id
@@ -58,6 +44,8 @@ function productFields(row) {
     note: row.note,
     warehouse: row.warehouse,
     spot: row.spot,
+    cases: row.case_count,
+    loose: row.loose_count,
   };
 }
 
