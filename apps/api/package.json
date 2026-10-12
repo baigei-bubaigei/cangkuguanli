@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3000",
     "build": "next build",
-    "test": "node --test --test-concurrency=1 tests/admin-auth.http.test.js tests/employee-auth.http.test.js",
+    "test": "node --test --test-concurrency=1 tests/admin-auth.http.test.js tests/employee-auth.http.test.js tests/products.http.test.js",
     "db:migrate": "node scripts/migrate.js"
   },
   "dependencies": {

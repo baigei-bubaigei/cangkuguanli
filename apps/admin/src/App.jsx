@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ProductCatalog from "@cangkuguanli/product-catalog";
 
 const adminPages = [
   { label: "库存查询", group: "业务" },
@@ -235,10 +236,14 @@ export default function App() {
         <main className="page-content">
           <p className="eyebrow">管理员专属</p>
           <h1>{activePage}</h1>
-          <section className="page-placeholder" aria-live="polite">
-            <span className="system-badge">管理员系统</span>
-            <p>当前管理员会话有效。{activePage}页面将在对应功能任务中接入。</p>
-          </section>
+          {activePage === "产品与货位" ? (
+            <ProductCatalog />
+          ) : (
+            <section className="page-placeholder" aria-live="polite">
+              <span className="system-badge">管理员系统</span>
+              <p>当前管理员会话有效。{activePage}页面将在对应功能任务中接入。</p>
+            </section>
+          )}
         </main>
       </div>
     </div>
