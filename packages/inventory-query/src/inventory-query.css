@@ -1,0 +1,30 @@
+.inventory-query { margin-top: 22px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.inventory-query-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 21px 24px; border-bottom: 1px solid var(--line); }
+.inventory-query-toolbar h2 { margin: 0; color: #26362f; font-size: 18px; font-weight: 650; letter-spacing: -.025em; }
+.inventory-query-toolbar p:last-child { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.inventory-query-eyebrow { margin: 0 0 7px; color: #658172; font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.inventory-query-filters { display: flex; gap: 10px; }
+.inventory-query-filters label { display: grid; gap: 6px; color: #52645b; font-size: 11px; font-weight: 650; }
+.inventory-query-search { width: min(270px, 25vw); }
+.inventory-query-warehouse { width: 175px; }
+.inventory-query-filters input, .inventory-query-filters select { width: 100%; min-width: 0; min-height: 39px; padding: 0 10px; border: 1px solid #dce4df; border-radius: 6px; outline: none; color: #26362f; background: #fff; font: inherit; font-weight: 400; }
+.inventory-query-filters input:focus, .inventory-query-filters select:focus { border-color: #6a9c82; box-shadow: 0 0 0 3px #e4f1e9; }
+.inventory-query-state { display: flex; min-height: 150px; align-items: center; justify-content: center; gap: 14px; padding: 24px; color: var(--muted); font-size: 13px; text-align: center; }
+.inventory-query-state p { margin: 0; }
+.inventory-query-retry { min-height: 36px; padding: 0 14px; border: 1px solid #dce4df; border-radius: 6px; color: #456057; background: #fff; font: inherit; font-weight: 600; }
+.inventory-query-retry:hover { background: #f5f8f5; }
+.inventory-query-table-wrap { overflow-x: auto; }
+.inventory-query-table { width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; }
+.inventory-query-table th { height: 42px; padding: 0 18px; color: #87958e; background: #fafbf9; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.inventory-query-table td { padding: 13px 18px; border-top: 1px solid #eef1ee; color: #586961; font-size: 12px; vertical-align: middle; }
+.inventory-query-product strong { display: block; color: #2e4139; font-size: 12px; font-weight: 650; }
+.inventory-query-product small { display: block; margin-top: 4px; color: #91a098; font-size: 10px; }
+.inventory-query-quantity { white-space: nowrap; }
+.inventory-query-quantity strong { color: #2e4139; font-size: 15px; font-weight: 700; }
+
+@media (max-width: 760px) {
+  .inventory-query-toolbar { align-items: stretch; flex-direction: column; gap: 17px; padding: 19px 16px; }
+  .inventory-query-filters { align-items: flex-end; }
+  .inventory-query-search { width: auto; flex: 1; }
+  .inventory-query-warehouse { width: 42%; }
+}

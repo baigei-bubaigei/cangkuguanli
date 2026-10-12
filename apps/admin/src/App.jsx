@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ProductCatalog from "@cangkuguanli/product-catalog";
+import InventoryQuery from "@cangkuguanli/inventory-query";
 
 const adminPages = [
   { label: "库存查询", group: "业务" },
@@ -236,7 +237,9 @@ export default function App() {
         <main className="page-content">
           <p className="eyebrow">管理员专属</p>
           <h1>{activePage}</h1>
-          {activePage === "产品与货位" ? (
+          {activePage === "库存查询" ? (
+            <InventoryQuery />
+          ) : activePage === "产品与货位" ? (
             <ProductCatalog />
           ) : (
             <section className="page-placeholder" aria-live="polite">
