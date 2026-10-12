@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./catalog.css";
 
 export default function ProductCatalog() {
   const [products, setProducts] = useState([]);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import ProductCatalog from "./ProductCatalog.jsx";
+import ProductCatalog from "@cangkuguanli/product-catalog";
 
 const employeePages = [
   { label: "库存查询", group: "库存工作区" },
