@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import InboundForm from "./InboundForm.jsx";
+import OutboundForm from "./OutboundForm.jsx";
 import "./inventory-query.css";
 
 export default function InventoryQuery() {
@@ -8,6 +9,7 @@ export default function InventoryQuery() {
   const [query, setQuery] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const [inboundContext, setInboundContext] = useState(null);
+  const [outboundContext, setOutboundContext] = useState(null);
 
   async function loadInventory() {
     setStatus("loading");
@@ -77,9 +79,23 @@ export default function InventoryQuery() {
           className="button button-dark"
           type="button"
           disabled={!inventory.products.length}
-          onClick={() => setInboundContext({})}
+          onClick={() => {
+            setOutboundContext(null);
+            setInboundContext({});
+          }}
         >
           登记入库
+        </button>
+        <button
+          className="button button-outline"
+          type="button"
+          disabled={!inventory.products.length}
+          onClick={() => {
+            setInboundContext(null);
+            setOutboundContext({});
+          }}
+        >
+          登记出库
         </button>
       </div>
 
@@ -126,9 +142,22 @@ export default function InventoryQuery() {
                     <button
                       className="inventory-query-inbound-toggle"
                       type="button"
-                      onClick={() => setInboundContext({ productId: product.id })}
+                      onClick={() => {
+                        setOutboundContext(null);
+                        setInboundContext({ productId: product.id });
+                      }}
                     >
                       入库
+                    </button>
+                    <button
+                      className="inventory-query-outbound-toggle"
+                      type="button"
+                      onClick={() => {
+                        setInboundContext(null);
+                        setOutboundContext({ productId: product.id });
+                      }}
+                    >
+                      出库
                     </button>
                   </td>
                 </tr>
@@ -146,6 +175,18 @@ export default function InventoryQuery() {
           onClose={() => setInboundContext(null)}
           onSaved={async () => {
             setInboundContext(null);
+            await loadInventory();
+          }}
+        />
+      )}
+      {outboundContext && (
+        <OutboundForm
+          products={inventory.products}
+          initialProductId={outboundContext.productId}
+          initialLocationId={outboundContext.locationId}
+          onClose={() => setOutboundContext(null)}
+          onSaved={async () => {
+            setOutboundContext(null);
             await loadInventory();
           }}
         />

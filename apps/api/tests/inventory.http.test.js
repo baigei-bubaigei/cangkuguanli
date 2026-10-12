@@ -110,6 +110,17 @@ function requestInbound(transaction, cookie) {
   });
 }
 
+function requestOutbound(transaction, cookie) {
+  return request("/api/inventory/outbound", {
+    method: "POST",
+    headers: {
+      ...(cookie ? { Cookie: cookie } : {}),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(transaction),
+  });
+}
+
 before(async () => {
   const migrations = spawnSync(process.execPath, [migrationCli], {
     cwd: apiDirectory,
@@ -504,4 +515,211 @@ test("admin and employee inbound transactions save inventory and account context
       recordedAtIsPresent: true,
     },
   ]);
+});
+
+test("admin and employee outbound transactions reject shortages and save shared stock changes", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const employeeCookie = await login("employee", employeeAccount);
+  const product = {
+    name: accountPrefix + " 出库测试",
+    category: "木制品",
+    categoryName: "家具",
+    spec: "四个一件",
+    perCase: 4,
+    note: "",
+    warehouse: accountPrefix + " 出库仓库 A",
+    spot: "A 位",
+  };
+  productNames.add(product.name);
+  warehouseNames.add(product.warehouse);
+  const createdResponse = await requestProduct(product, adminCookie);
+  assert.equal(createdResponse.status, 201);
+  const createdProduct = await createdResponse.json();
+
+  const otherProduct = {
+    ...product,
+    name: accountPrefix + " 出库其他规格",
+    warehouse: accountPrefix + " 出库仓库 B",
+  };
+  productNames.add(otherProduct.name);
+  warehouseNames.add(otherProduct.warehouse);
+  const otherProductResponse = await requestProduct(otherProduct, employeeCookie);
+  assert.equal(otherProductResponse.status, 201);
+  const otherCreatedProduct = await otherProductResponse.json();
+
+  await pool.query(
+    `UPDATE product_spec_locations
+        SET case_count = 2, loose_count = 5
+      WHERE product_spec_id = $1 AND location_id = $2`,
+    [createdProduct.id, createdProduct.locationId],
+  );
+
+  const basePayload = {
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 1,
+    loose: 2,
+    actualOccurredAt: "2026-10-12T07:00:00.000Z",
+  };
+  const anonymousResponse = await requestOutbound(basePayload);
+  assert.equal(anonymousResponse.status, 401);
+
+  const invalidPayloads = [
+    { ...basePayload, cases: 0, loose: 0 },
+    { ...basePayload, cases: -1 },
+    { ...basePayload, loose: 1.5 },
+    { ...basePayload, actualOccurredAt: "不是实际时间" },
+  ];
+  for (const payload of invalidPayloads) {
+    const response = await requestOutbound(payload, employeeCookie);
+    assert.equal(response.status, 400);
+  }
+
+  const wrongLocationResponse = await requestOutbound({
+    ...basePayload,
+    locationId: otherCreatedProduct.locationId,
+  }, adminCookie);
+  assert.equal(wrongLocationResponse.status, 404);
+
+  for (const payload of [
+    { ...basePayload, cases: 3, loose: 0 },
+    { ...basePayload, cases: 0, loose: 6 },
+  ]) {
+    const response = await requestOutbound(payload, employeeCookie);
+    assert.equal(response.status, 409);
+  }
+
+  const rejectedStock = await pool.query(
+    `SELECT case_count, loose_count
+       FROM product_spec_locations
+      WHERE product_spec_id = $1 AND location_id = $2`,
+    [createdProduct.id, createdProduct.locationId],
+  );
+  assert.deepEqual(rejectedStock.rows[0], { case_count: 2, loose_count: 5 });
+  const rejectedTransactions = await pool.query(
+    "SELECT COUNT(*)::INTEGER AS count FROM inventory_transactions WHERE product_spec_id = $1",
+    [createdProduct.id],
+  );
+  assert.equal(rejectedTransactions.rows[0].count, 0);
+
+  const employeeOccurredAt = "2026-10-12T07:00:00.000Z";
+  const employeeResponse = await requestOutbound({
+    ...basePayload,
+    actualOccurredAt: employeeOccurredAt,
+  }, employeeCookie);
+  assert.equal(employeeResponse.status, 201);
+  const employeeOutbound = await employeeResponse.json();
+  assert.deepEqual({
+    operationType: employeeOutbound.operationType,
+    productSpecId: employeeOutbound.productSpecId,
+    locationId: employeeOutbound.locationId,
+    cases: employeeOutbound.cases,
+    loose: employeeOutbound.loose,
+    actualOccurredAt: employeeOutbound.actualOccurredAt,
+    actorAccount: employeeOutbound.actorAccount,
+    sourceSystem: employeeOutbound.sourceSystem,
+    locationCases: employeeOutbound.locationCases,
+    locationLoose: employeeOutbound.locationLoose,
+  }, {
+    operationType: "outbound",
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 1,
+    loose: 2,
+    actualOccurredAt: employeeOccurredAt,
+    actorAccount: employeeAccount,
+    sourceSystem: "employee",
+    locationCases: 1,
+    locationLoose: 3,
+  });
+
+  const adminOccurredAt = "2026-10-12T07:05:00.000Z";
+  const adminResponse = await requestOutbound({
+    ...basePayload,
+    cases: 0,
+    loose: 1,
+    actualOccurredAt: adminOccurredAt,
+  }, adminCookie);
+  assert.equal(adminResponse.status, 201);
+  const adminOutbound = await adminResponse.json();
+  assert.deepEqual({
+    operationType: adminOutbound.operationType,
+    cases: adminOutbound.cases,
+    loose: adminOutbound.loose,
+    actualOccurredAt: adminOutbound.actualOccurredAt,
+    actorAccount: adminOutbound.actorAccount,
+    sourceSystem: adminOutbound.sourceSystem,
+    locationCases: adminOutbound.locationCases,
+    locationLoose: adminOutbound.locationLoose,
+  }, {
+    operationType: "outbound",
+    cases: 0,
+    loose: 1,
+    actualOccurredAt: adminOccurredAt,
+    actorAccount: adminAccount,
+    sourceSystem: "admin",
+    locationCases: 1,
+    locationLoose: 2,
+  });
+
+  const concurrentResponses = await Promise.all([
+    requestOutbound({ ...basePayload, cases: 1, loose: 0 }, adminCookie),
+    requestOutbound({ ...basePayload, cases: 1, loose: 0 }, employeeCookie),
+  ]);
+  assert.deepEqual(concurrentResponses.map((response) => response.status).sort(), [201, 409]);
+
+  const adminInventoryResponse = await requestInventory(adminCookie);
+  const employeeInventoryResponse = await requestInventory(employeeCookie);
+  assert.equal(adminInventoryResponse.status, 200);
+  assert.equal(employeeInventoryResponse.status, 200);
+  const adminInventory = await adminInventoryResponse.json();
+  const employeeInventory = await employeeInventoryResponse.json();
+  assert.deepEqual(employeeInventory, adminInventory);
+  const savedProduct = adminInventory.products.find((item) => item.id === createdProduct.id);
+  assert.equal(savedProduct.totalCases, 0);
+  assert.equal(savedProduct.totalLoose, 2);
+  assert.deepEqual(savedProduct.locations.map(({ cases, loose }) => ({ cases, loose })), [
+    { cases: 0, loose: 2 },
+  ]);
+
+  const transactionRows = await pool.query(
+    `SELECT operation_type, case_count, loose_count, actual_occurred_at,
+            actor_account, source_system, recorded_at
+       FROM inventory_transactions
+      WHERE product_spec_id = $1
+      ORDER BY id`,
+    [createdProduct.id],
+  );
+  assert.equal(transactionRows.rowCount, 3);
+  assert.deepEqual(transactionRows.rows.slice(0, 2).map((row) => ({
+    operationType: row.operation_type,
+    cases: row.case_count,
+    loose: row.loose_count,
+    actualOccurredAt: row.actual_occurred_at.toISOString(),
+    actorAccount: row.actor_account,
+    sourceSystem: row.source_system,
+    recordedAtIsPresent: row.recorded_at instanceof Date,
+  })), [
+    {
+      operationType: "outbound",
+      cases: 1,
+      loose: 2,
+      actualOccurredAt: employeeOccurredAt,
+      actorAccount: employeeAccount,
+      sourceSystem: "employee",
+      recordedAtIsPresent: true,
+    },
+    {
+      operationType: "outbound",
+      cases: 0,
+      loose: 1,
+      actualOccurredAt: adminOccurredAt,
+      actorAccount: adminAccount,
+      sourceSystem: "admin",
+      recordedAtIsPresent: true,
+    },
+  ]);
+  assert.equal(transactionRows.rows[2].operation_type, "outbound");
+  assert.equal(transactionRows.rows[2].case_count, 1);
+  assert.equal(transactionRows.rows[2].loose_count, 0);
 });
