@@ -242,6 +242,6 @@ export function findExactCatalogCandidates(row, products) {
 
   return {
     candidates,
-    issue: candidates.length ? "" : "未找到五项信息完全一致的已保存资料。",
+    issue: candidates.length ? "" : "未找到完全匹配的产品包装与货位资料。",
   };
 }
