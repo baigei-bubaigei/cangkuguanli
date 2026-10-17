@@ -477,4 +477,127 @@ test("inventory failures and operation log failures do not leave successful busi
     transaction_count: 0,
     log_count: 0,
   });
+  await queryDatabase("DROP TRIGGER issue29_reject_inventory_log ON system_operation_logs");
+  await queryDatabase("DROP FUNCTION issue29_reject_inventory_log()");
+});
+
+test("concurrent admin and employee outbounds cannot consume the same last loose item", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const employeeCookie = await login("employee", employeeAccount);
+  const productResponse = await post("/api/catalog/products", {
+    name: `${accountPrefix} 并发库存商品`,
+    category: "类别",
+    categoryName: "分类",
+    spec: "四个一件",
+    perCase: 4,
+    note: "",
+    warehouse: `${accountPrefix} 并发仓库`,
+    spot: "A 位",
+  }, adminCookie);
+  assert.equal(productResponse.status, 201);
+  const product = await productResponse.json();
+  const actualOccurredAt = "2026-10-16T04:03:02.000Z";
+
+  const inboundResponse = await post("/api/inventory/inbound", {
+    productSpecId: product.id,
+    locationId: product.locationId,
+    cases: 0,
+    loose: 1,
+    actualOccurredAt,
+  }, adminCookie);
+  assert.equal(inboundResponse.status, 201);
+
+  const lockClient = await pool.connect();
+  let lockOpen = false;
+  try {
+    await assertIsolatedConnection(lockClient);
+    await lockClient.query("BEGIN");
+    lockOpen = true;
+    const inventory = await lockClient.query(
+      `SELECT case_count, loose_count
+         FROM product_spec_locations
+        WHERE product_spec_id = $1
+          AND location_id = $2
+        FOR UPDATE`,
+      [product.id, product.locationId],
+    );
+    assert.deepEqual(inventory.rows[0], { case_count: 0, loose_count: 1 });
+
+    const submissions = [
+      post("/api/inventory/outbound", {
+        productSpecId: product.id,
+        locationId: product.locationId,
+        cases: 0,
+        loose: 1,
+        actualOccurredAt,
+      }, adminCookie),
+      post("/api/inventory/outbound", {
+        productSpecId: product.id,
+        locationId: product.locationId,
+        cases: 0,
+        loose: 1,
+        actualOccurredAt,
+      }, employeeCookie),
+    ];
+
+    let observedWaiters = 0;
+    let waitError;
+    try {
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const waiters = await queryDatabase(
+          `SELECT COUNT(*)::INTEGER AS count
+             FROM pg_stat_activity
+            WHERE pid <> pg_backend_pid()
+              AND datname = current_database()
+              AND wait_event_type = 'Lock'
+              AND query LIKE '%product_spec_locations%'`,
+        );
+        observedWaiters = waiters.rows[0].count;
+        if (observedWaiters === 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      assert.equal(observedWaiters, 2, "both HTTP submissions should be waiting on the locked inventory row");
+    } catch (error) {
+      waitError = error;
+    } finally {
+      await lockClient.query("ROLLBACK");
+      lockOpen = false;
+    }
+
+    const results = await Promise.allSettled(submissions);
+    if (waitError) throw waitError;
+
+    const responses = results.map((result) => {
+      assert.equal(result.status, "fulfilled");
+      return result.value;
+    });
+    assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
+  } finally {
+    if (lockOpen) await lockClient.query("ROLLBACK");
+    lockClient.release();
+  }
+
+  const finalState = await queryDatabase(
+    `SELECT location.case_count, location.loose_count,
+            (SELECT COUNT(*)::INTEGER
+               FROM inventory_transactions
+              WHERE product_spec_id = $1) AS transaction_count,
+            (SELECT COUNT(*)::INTEGER
+               FROM system_operation_logs AS log
+               JOIN inventory_transactions AS tx
+                 ON log.target_type = 'inventory_transaction'
+                AND log.target_id = tx.id
+              WHERE tx.product_spec_id = $1) AS log_count
+       FROM product_spec_locations AS location
+      WHERE location.product_spec_id = $1
+        AND location.location_id = $2`,
+    [product.id, product.locationId],
+  );
+  assert.deepEqual(finalState.rows[0], {
+    case_count: 0,
+    loose_count: 0,
+    transaction_count: 2,
+    log_count: 2,
+  });
 });
