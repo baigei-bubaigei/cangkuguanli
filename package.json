@@ -14,6 +14,7 @@
     "build:api": "npm run build --workspace @cangkuguanli/api",
     "test:api": "npm run test --workspace @cangkuguanli/api",
     "db:migrate": "npm run db:migrate --workspace @cangkuguanli/api",
-    "db:backup": "npm run db:backup --workspace @cangkuguanli/api --"
+    "db:backup": "npm run db:backup --workspace @cangkuguanli/api --",
+    "db:restore": "npm run db:restore --workspace @cangkuguanli/api --"
   }
 }
