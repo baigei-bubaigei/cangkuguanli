@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentCatalogActor } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
+import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -121,9 +122,24 @@ export async function POST(request) {
         actor.sourceSystem,
       ],
     );
+    const transaction = transactionResult.rows[0];
+    await writeOperationLog(client, {
+      actor,
+      operationType: "inventory_move",
+      targetType: "inventory_transaction",
+      targetId: transaction.id,
+      content: {
+        productSpecId,
+        sourceLocationId,
+        targetLocationId,
+        cases: body.cases,
+        loose: body.loose,
+        note,
+        actualOccurredAt: transaction.actual_occurred_at.toISOString(),
+      },
+    });
     await client.query("COMMIT");
 
-    const transaction = transactionResult.rows[0];
     const sourceInventory = sourceInventoryResult.rows[0];
     const targetInventory = targetInventoryResult.rows[0];
     return NextResponse.json({

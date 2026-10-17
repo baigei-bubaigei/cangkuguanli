@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentCatalogActor } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
+import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -101,9 +102,23 @@ export async function POST(request) {
         actor.sourceSystem,
       ],
     );
+    const transaction = transactionResult.rows[0];
+    await writeOperationLog(client, {
+      actor,
+      operationType: "inventory_split",
+      targetType: "inventory_transaction",
+      targetId: transaction.id,
+      content: {
+        productSpecId,
+        locationId,
+        casesSplit: body.cases,
+        perCase: available.per_case_count,
+        looseAdded,
+        actualOccurredAt: transaction.actual_occurred_at.toISOString(),
+      },
+    });
     await client.query("COMMIT");
 
-    const transaction = transactionResult.rows[0];
     return NextResponse.json({
       transactionId: String(transaction.id),
       operationType: "split",
