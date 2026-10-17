@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
+import { productOptionLabel } from "./productOptionLabel.js";
 
 function localDateTimeNow() {
   const now = new Date();
@@ -110,7 +111,7 @@ export default function MoveForm({ products, initialProductId, initialSourceLoca
             <span>产品规格</span>
             <select value={productSpecId} onChange={handleProductChange} required>
               {products.map((product) => (
-                <option key={product.id} value={product.id}>{product.name} · {product.spec}</option>
+                <option key={product.id} value={product.id}>{productOptionLabel(product)}</option>
               ))}
             </select>
           </label>

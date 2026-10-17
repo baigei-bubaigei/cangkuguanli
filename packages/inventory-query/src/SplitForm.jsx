@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
+import { productOptionLabel } from "./productOptionLabel.js";
 
 function localDateTimeNow() {
   const now = new Date();
@@ -16,6 +17,7 @@ export default function SplitForm({ products, initialProductId, initialLocationI
   ));
   const [cases, setCases] = useState("");
   const [actualOccurredAt, setActualOccurredAt] = useState(localDateTimeNow);
+  const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const submissionRef = useRef(null);
@@ -47,6 +49,7 @@ export default function SplitForm({ products, initialProductId, initialLocationI
         locationId,
         cases: splitCases,
         actualOccurredAt: new Date(actualOccurredAt).toISOString(),
+        note,
       };
       const response = await fetch("/api/inventory/split", inventoryMutationOptions(
         submissionRef,
@@ -84,7 +87,7 @@ export default function SplitForm({ products, initialProductId, initialLocationI
             <span>产品规格</span>
             <select value={productSpecId} onChange={handleProductChange} required>
               {products.map((product) => (
-                <option key={product.id} value={product.id}>{product.name} · {product.spec}</option>
+                <option key={product.id} value={product.id}>{productOptionLabel(product)}</option>
               ))}
             </select>
           </label>
@@ -115,6 +118,10 @@ export default function SplitForm({ products, initialProductId, initialLocationI
           <label>
             <span>实际发生时间</span>
             <input type="datetime-local" value={actualOccurredAt} onChange={(event) => setActualOccurredAt(event.target.value)} required />
+          </label>
+          <label>
+            <span>备注（选填）</span>
+            <input type="text" value={note} onChange={(event) => setNote(event.target.value)} />
           </label>
           {error && <p className="inventory-query-split-error" role="alert">{error}</p>}
           <div className="inventory-query-split-actions">

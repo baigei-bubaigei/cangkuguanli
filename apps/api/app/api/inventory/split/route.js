@@ -76,8 +76,10 @@ export async function POST(request) {
     const productSpecId = requiredId(body.productSpecId);
     const locationId = requiredId(body.locationId);
     const actualOccurredAt = occurredAt(body.actualOccurredAt);
+    const note = body.note === undefined ? "" : body.note;
     if (!productSpecId || !locationId
       || !Number.isInteger(body.cases) || body.cases <= 0 || body.cases > 2147483647
+      || typeof note !== "string"
       || !actualOccurredAt) {
       await client.query("ROLLBACK");
       return invalidRequest();
@@ -119,16 +121,17 @@ export async function POST(request) {
     );
     const transactionResult = await client.query(
       `INSERT INTO inventory_transactions (
-         operation_type, product_spec_id, location_id, case_count, loose_count,
+         operation_type, product_spec_id, location_id, case_count, loose_count, note,
          actual_occurred_at, actor_account, source_system
        )
-       VALUES ('split', $1, $2, $3, $4, $5, $6, $7)
+       VALUES ('split', $1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, actual_occurred_at, recorded_at`,
       [
         productSpecId,
         locationId,
         body.cases,
         looseAdded,
+        note,
         actualOccurredAt,
         actor.account,
         actor.sourceSystem,
@@ -146,6 +149,7 @@ export async function POST(request) {
         casesSplit: body.cases,
         perCase: available.per_case_count,
         looseAdded,
+        note,
         actualOccurredAt: transaction.actual_occurred_at.toISOString(),
       },
     });
@@ -157,6 +161,7 @@ export async function POST(request) {
       casesSplit: body.cases,
       perCase: available.per_case_count,
       looseAdded,
+      note,
       actualOccurredAt: transaction.actual_occurred_at.toISOString(),
       recordedAt: transaction.recorded_at.toISOString(),
       actorAccount: actor.account,

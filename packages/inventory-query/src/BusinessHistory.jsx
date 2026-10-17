@@ -49,7 +49,7 @@ function correctionContent(record, content) {
   const quantity = record.operationType === "split"
     ? `拆开 ${content.cases} 件，增加 ${content.loose} 个散个`
     : quantityText(content.cases, content.loose);
-  const note = record.operationType === "move" && content.note
+  const note = content.note
     ? ` · 备注：${content.note}`
     : "";
   return `${quantity} · 实际发生 ${formatTime(content.actualOccurredAt)}${note}`;
@@ -120,7 +120,7 @@ export default function BusinessHistory({ sourceSystem }) {
         actualOccurredAt: new Date(editValues.actualOccurredAt).toISOString(),
       };
       if (editingRecord.operationType !== "split") body.loose = Number(editValues.loose);
-      if (editingRecord.operationType === "move") body.note = editValues.note;
+      body.note = editValues.note;
 
       const url = `/api/inventory/history/${editingRecord.id}`;
       const response = await fetch(url, inventoryMutationOptions(
@@ -169,7 +169,7 @@ export default function BusinessHistory({ sourceSystem }) {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索产品、规格、货位或操作人"
+              placeholder="搜索产品、规格、材质、颜色、货位或操作人"
             />
           </label>
           <label className="business-history-source">
@@ -207,10 +207,13 @@ export default function BusinessHistory({ sourceSystem }) {
                 <tr key={record.id} data-record-id={record.id}>
                   <td><span className={`business-history-type business-history-${record.operationType}`}>{typeLabels[record.operationType] ?? record.operationType}</span></td>
                   <td className="business-history-product">
-                    <strong>{record.product.name}</strong>
-                    <small>{record.product.spec} · 每件 {record.product.perCase} 个</small>
+                    <strong>{record.product.name || "未填写产品名"}</strong>
+                    <small>规格：{record.product.spec || "未填写"} · 材质：{record.product.material || "未填写"} · 颜色：{record.product.color || "未填写"} · 每件 {record.product.perCase} 个</small>
                   </td>
-                  <td className="business-history-change">{changeText(record)}</td>
+                  <td className="business-history-change">
+                    {changeText(record)}
+                    {record.note && <small>备注：{record.note}</small>}
+                  </td>
                   <td className="business-history-location">
                     <span>{record.location.warehouse} · {record.location.spot}</span>
                     {record.targetLocation && <small>→ {record.targetLocation.warehouse} · {record.targetLocation.spot}</small>}
@@ -321,7 +324,7 @@ export default function BusinessHistory({ sourceSystem }) {
                   required
                 />
               </label>
-              {editingRecord.operationType === "move" && (
+              {editingRecord.operationType !== "initial" && (
                 <label>
                   <span>备注（选填）</span>
                   <input

@@ -226,11 +226,9 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: "该业务记录已被其他人更正，未覆盖已有内容；请刷新记录后重试。" }, { status: 409 });
     }
 
-    const allowedFields = transaction.operation_type === "move"
-      ? new Set(["cases", "loose", "actualOccurredAt", "note"])
-      : transaction.operation_type === "split"
-        ? new Set(["cases", "actualOccurredAt"])
-        : new Set(["cases", "loose", "actualOccurredAt"]);
+    const allowedFields = transaction.operation_type === "split"
+      ? new Set(["cases", "actualOccurredAt", "note"])
+      : new Set(["cases", "loose", "actualOccurredAt", "note"]);
     if (Object.keys(body).some((key) => key !== "expectedRevision" && !allowedFields.has(key))) {
       await client.query("ROLLBACK");
       return invalidRequest();

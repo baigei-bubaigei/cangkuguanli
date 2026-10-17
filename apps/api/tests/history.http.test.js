@@ -246,6 +246,8 @@ test("admin and employee can read the same inbound business record with its hist
   const employeeCookie = await login("employee", employeeAccount);
   const product = {
     name: accountPrefix + " 历史产品",
+    material: "铝合金",
+    color: "白色",
     category: "木制品",
     categoryName: "家具",
     spec: "四个一件",
@@ -259,12 +261,23 @@ test("admin and employee can read the same inbound business record with its hist
   const createdProduct = await productResponse.json();
 
   const actualOccurredAt = "2026-10-16T10:15:00.000Z";
+  const invalidNoteResponse = await requestInbound({
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 1,
+    loose: 0,
+    actualOccurredAt,
+    note: 12,
+  }, adminCookie);
+  assert.equal(invalidNoteResponse.status, 400);
+
   const inboundResponse = await requestInbound({
     productSpecId: createdProduct.id,
     locationId: createdProduct.locationId,
     cases: 3,
     loose: 2,
     actualOccurredAt,
+    note: "补录到货",
   }, adminCookie);
   assert.equal(inboundResponse.status, 201);
   const inbound = await inboundResponse.json();
@@ -282,6 +295,8 @@ test("admin and employee can read the same inbound business record with its hist
         id: createdProduct.id,
         name: product.name,
         spec: product.spec,
+        material: product.material,
+        color: product.color,
         perCase: product.perCase,
       },
       cases: 3,
@@ -296,7 +311,7 @@ test("admin and employee can read the same inbound business record with its hist
       recordedAt: inbound.recordedAt,
       actor: { account: adminAccount, displayName: "T12 测试管理员" },
       sourceSystem: "admin",
-      note: "",
+      note: "补录到货",
       corrections: [],
     }],
   });
@@ -321,19 +336,21 @@ test("admin and employee can read the same inbound business record with its hist
     cases: 1,
     loose: 1,
     actualOccurredAt: outboundAt,
+    note: "员工出库备注",
   }, employeeCookie);
   assert.equal(outboundResponse.status, 201);
   const outbound = await outboundResponse.json();
 
   const moveAt = "2026-10-16T12:15:00.000Z";
   const moveResponse = await requestMove({
-      productSpecId: createdProduct.id,
-      sourceLocationId: createdProduct.locationId,
-      targetLocationId: createdSecondLocation.locationId,
-      cases: 1,
-      loose: 1,
-      actualOccurredAt: moveAt,
-    }, adminCookie);
+    productSpecId: createdProduct.id,
+    sourceLocationId: createdProduct.locationId,
+    targetLocationId: createdSecondLocation.locationId,
+    cases: 1,
+    loose: 1,
+    actualOccurredAt: moveAt,
+    note: "管理员移位备注",
+  }, adminCookie);
   assert.equal(moveResponse.status, 201);
   const move = await moveResponse.json();
 
@@ -343,6 +360,7 @@ test("admin and employee can read the same inbound business record with its hist
     locationId: createdProduct.locationId,
     cases: 1,
     actualOccurredAt: splitAt,
+    note: "员工拆件备注",
   }, employeeCookie);
   assert.equal(splitResponse.status, 201);
   const split = await splitResponse.json();
@@ -367,6 +385,8 @@ test("admin and employee can read the same inbound business record with its hist
       id: createdProduct.id,
       name: product.name,
       spec: product.spec,
+      material: product.material,
+      color: product.color,
       perCase: product.perCase,
     },
     cases: 1,
@@ -381,11 +401,14 @@ test("admin and employee can read the same inbound business record with its hist
     recordedAt: split.recordedAt,
     actor: { account: employeeAccount, displayName: "T12 测试员工" },
     sourceSystem: "employee",
-    note: "",
+    note: "员工拆件备注",
     corrections: [],
   });
   assert.equal(allAdminHistory.records[1].operationType, "move");
   assert.equal(allAdminHistory.records[1].sourceSystem, "admin");
+  assert.equal(allAdminHistory.records[1].note, "管理员移位备注");
+  assert.equal(allAdminHistory.records[2].note, "员工出库备注");
+  assert.equal(allAdminHistory.records[3].note, "补录到货");
   assert.deepEqual(allAdminHistory.records[1].targetLocation, {
     id: createdSecondLocation.locationId,
     warehouse: product.warehouse,
@@ -408,6 +431,24 @@ test("admin and employee can read the same inbound business record with its hist
   assert.deepEqual((await keywordResponse.json()).records.map((record) => record.id), [
     split.transactionId,
     outbound.transactionId,
+  ]);
+
+  const materialResponse = await requestHistory(employeeCookie, "?q=" + encodeURIComponent("铝合金"));
+  assert.equal(materialResponse.status, 200);
+  assert.deepEqual((await materialResponse.json()).records.map((record) => record.id), [
+    split.transactionId,
+    move.transactionId,
+    outbound.transactionId,
+    inbound.transactionId,
+  ]);
+
+  const colorResponse = await requestHistory(employeeCookie, "?q=" + encodeURIComponent("白色"));
+  assert.equal(colorResponse.status, 200);
+  assert.deepEqual((await colorResponse.json()).records.map((record) => record.id), [
+    split.transactionId,
+    move.transactionId,
+    outbound.transactionId,
+    inbound.transactionId,
   ]);
 
   const noResultsResponse = await requestHistory(adminCookie, "?type=initial");
@@ -451,6 +492,7 @@ test("admin and employee can correct supported inventory entries without losing 
     cases: 5,
     loose: 4,
     actualOccurredAt: "2026-10-14T10:00:00.000Z",
+    note: "入库原备注",
   }, adminCookie);
   assert.equal(inboundResponse.status, 201);
   const inbound = await inboundResponse.json();
@@ -465,6 +507,7 @@ test("admin and employee can correct supported inventory entries without losing 
     cases: 4,
     loose: 3,
     actualOccurredAt: "2026-10-14T09:45:00.000Z",
+    note: "入库更正备注",
   }, adminCookie + "; " + employeeCookie, "employee");
   assert.equal(inboundCorrectionResponse.status, 200);
 
@@ -492,6 +535,7 @@ test("admin and employee can correct supported inventory entries without losing 
     cases: 1,
     loose: 1,
     actualOccurredAt: "2026-10-14T12:00:00.000Z",
+    note: "出库原备注",
   }, employeeCookie);
   assert.equal(outboundResponse.status, 201);
   const outbound = await outboundResponse.json();
@@ -499,6 +543,7 @@ test("admin and employee can correct supported inventory entries without losing 
     expectedRevision: null,
     cases: 2,
     loose: 1,
+    note: "出库更正备注",
   }, adminCookie);
   assert.equal(outboundCorrectionResponse.status, 200);
   const outboundCorrection = await outboundCorrectionResponse.json();
@@ -541,12 +586,14 @@ test("admin and employee can correct supported inventory entries without losing 
     locationId: createdProduct.locationId,
     cases: 1,
     actualOccurredAt: "2026-10-14T14:00:00.000Z",
+    note: "拆件原备注",
   }, employeeCookie);
   assert.equal(splitResponse.status, 201);
   const split = await splitResponse.json();
   const splitCorrectionResponse = await requestCorrection(split.transactionId, {
     expectedRevision: null,
     cases: 2,
+    note: "拆件更正备注",
   }, adminCookie);
   assert.equal(splitCorrectionResponse.status, 200);
 
@@ -568,6 +615,7 @@ test("admin and employee can correct supported inventory entries without losing 
   assert.equal(correctedInbound.cases, 4);
   assert.equal(correctedInbound.loose, 3);
   assert.equal(correctedInbound.actualOccurredAt, "2026-10-14T09:45:00.000Z");
+  assert.equal(correctedInbound.note, "入库更正备注");
   assert.equal(correctedInbound.actor.account, adminAccount);
   assert.equal(correctedInbound.corrections.length, 1);
   assert.equal(correctedInbound.revisionId, correctedInbound.corrections[0].id);
@@ -576,13 +624,18 @@ test("admin and employee can correct supported inventory entries without losing 
   assert.equal(correctedInbound.corrections[0].sourceSystem, "employee");
   assert.equal(correctedInbound.corrections[0].before.cases, 5);
   assert.equal(correctedInbound.corrections[0].before.loose, 4);
+  assert.equal(correctedInbound.corrections[0].before.note, "入库原备注");
   assert.equal(correctedInbound.corrections[0].after.cases, 4);
   assert.equal(correctedInbound.corrections[0].after.loose, 3);
+  assert.equal(correctedInbound.corrections[0].after.note, "入库更正备注");
   assert.equal(typeof correctedInbound.corrections[0].correctedAt, "string");
 
   const correctedOutbound = history.records.find((record) => record.id === outbound.transactionId);
   assert.equal(correctedOutbound.cases, 2);
   assert.equal(correctedOutbound.loose, 1);
+  assert.equal(correctedOutbound.note, "出库更正备注");
+  assert.equal(correctedOutbound.corrections[0].before.note, "出库原备注");
+  assert.equal(correctedOutbound.corrections[0].after.note, "出库更正备注");
   const correctedMove = history.records.find((record) => record.id === move.transactionId);
   assert.equal(correctedMove.cases, 1);
   assert.equal(correctedMove.loose, 2);
@@ -594,6 +647,9 @@ test("admin and employee can correct supported inventory entries without losing 
   const correctedSplit = history.records.find((record) => record.id === split.transactionId);
   assert.equal(correctedSplit.cases, 2);
   assert.equal(correctedSplit.loose, 8);
+  assert.equal(correctedSplit.note, "拆件更正备注");
+  assert.equal(correctedSplit.corrections[0].before.note, "拆件原备注");
+  assert.equal(correctedSplit.corrections[0].after.note, "拆件更正备注");
 
   const concurrentResults = await Promise.all([
     requestCorrection(additionalInbound.transactionId, {

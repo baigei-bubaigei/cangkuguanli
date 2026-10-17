@@ -72,6 +72,7 @@ test("parses XLSX cells, formulas and available formatted values, and keeps ever
   assert.equal(cellByField(sheet.rows[0], "quantity"), undefined);
   assert.equal(sheet.rows[0].cells.find((cell) => cell.header === "数量").rawValue, 17);
   assert.equal(sheet.rows[0].cells.find((cell) => cell.header === "盘点日期").rawValue, 46300);
+  assert.match(sheet.issues.join("；"), /盘点日期/);
 });
 
 test("omits blank formula rows while keeping rows with source data", () => {
@@ -161,4 +162,33 @@ test("marks rows without a positive case or loose quantity as unsubmitable", () 
 
 test("rejects file extensions outside the three confirmed formats", () => {
   assert.throws(() => parseInventoryFile("库存.ods", new Uint8Array()), /仅支持 \.xlsx、\.xls、\.csv/);
+});
+
+test("blocks unsupported named and unnamed data columns while parsing supported headers", () => {
+  const supportedHeaders = headers.filter((header) => header !== "数量");
+  const supportedCsv = [
+    supportedHeaders.join(","),
+    "A-01,壁灯,照明,室内,备注,E27,6,2,3,一号仓,铝合金,白色",
+  ].join("\r\n");
+  const supportedSheet = parseInventoryFile("初始库存.csv", new TextEncoder().encode(supportedCsv)).sheets[0];
+
+  assert.deepEqual(supportedSheet.issues, []);
+  assert.equal(cellByField(supportedSheet.rows[0], "productName").rawValue, "壁灯");
+  assert.equal(cellByField(supportedSheet.rows[0], "material").rawValue, "铝合金");
+  assert.equal(cellByField(supportedSheet.rows[0], "color").rawValue, "白色");
+
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    [...supportedHeaders, "盘点日期", ""],
+    ["A-01", "壁灯", "照明", "室内", "备注", "E27", 6, 2, 3, "一号仓", "铝合金", "白色", "2026-10-17", "不可丢弃"],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "待核对");
+
+  const result = parseInventoryFile("待核对.xlsx", XLSX.write(workbook, { bookType: "xlsx", type: "array" }));
+  const blockedSheet = result.sheets[0];
+
+  assert.match(blockedSheet.issues.join("；"), /不支持的列：盘点日期/);
+  assert.match(blockedSheet.issues.join("；"), /第 14 列（表头空白）包含数据/);
+  assert.equal(cellByField(blockedSheet.rows[0], "productName").rawValue, "壁灯");
+  assert.equal(cellByField(blockedSheet.rows[0], "material").rawValue, "铝合金");
 });

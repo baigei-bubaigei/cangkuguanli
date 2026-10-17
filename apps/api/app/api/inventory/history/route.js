@@ -17,6 +17,8 @@ function historyRecord(row) {
       id: String(row.product_spec_id),
       name: row.product_name,
       spec: row.spec,
+      material: row.material,
+      color: row.color,
       perCase: row.per_case_count,
     },
     cases: row.case_count,
@@ -65,7 +67,7 @@ export async function GET(request) {
       `SELECT t.id, t.operation_type, t.product_spec_id, t.location_id, t.target_location_id,
               t.case_count, t.loose_count, t.actual_occurred_at, t.recorded_at,
               t.actor_account, t.source_system, t.note,
-              p.product_name, p.spec, p.per_case_count,
+              p.product_name, p.spec, p.material, p.color, p.per_case_count,
               w.name AS warehouse_name, l.name AS location_name,
               tw.name AS target_warehouse_name, tl.name AS target_location_name,
               COALESCE(
@@ -86,6 +88,8 @@ export async function GET(request) {
             $3 = ''
             OR POSITION(LOWER($3) IN LOWER(p.product_name)) > 0
             OR POSITION(LOWER($3) IN LOWER(p.spec)) > 0
+            OR POSITION(LOWER($3) IN LOWER(p.material)) > 0
+            OR POSITION(LOWER($3) IN LOWER(p.color)) > 0
             OR POSITION(LOWER($3) IN LOWER(w.name || ' · ' || l.name)) > 0
             OR POSITION(LOWER($3) IN LOWER(t.actor_account)) > 0
             OR POSITION(LOWER($3) IN LOWER(COALESCE(aa.display_name, ea.display_name, ''))) > 0

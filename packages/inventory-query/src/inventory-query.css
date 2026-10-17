@@ -135,6 +135,7 @@
 .business-history-product strong, .business-history-time strong, .business-history-actor strong { display: block; color: #2e4139; font-size: 12px; font-weight: 650; }
 .business-history-product small, .business-history-location small, .business-history-time small, .business-history-actor small { display: block; margin-top: 4px; color: #91a098; font-size: 10px; }
 .business-history-change { white-space: nowrap; }
+.business-history-change small { display: block; margin-top: 4px; color: #91a098; font-size: 10px; white-space: normal; }
 .business-history-location { line-height: 1.5; }
 .business-history-footer { display: flex; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid #edf0ed; color: #9aa69f; font-size: 10px; }
 .business-history-correct { display: block; margin-top: 8px; padding: 5px 8px; border: 1px solid #d8e2dc; border-radius: 6px; color: #426852; background: #f6faf7; font: inherit; font-size: 10px; cursor: pointer; }

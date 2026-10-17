@@ -260,6 +260,7 @@ test("inventory operations are linked to durable admin and employee system logs"
     cases: 3,
     loose: 2,
     actualOccurredAt,
+    note: "库存盘点补录",
   }, employeeCookie);
   assert.equal(inboundResponse.status, 201);
   const inbound = await inboundResponse.json();
@@ -270,6 +271,7 @@ test("inventory operations are linked to durable admin and employee system logs"
     cases: 1,
     loose: 1,
     actualOccurredAt,
+    note: "售后寄件",
   }, adminCookie);
   assert.equal(outboundResponse.status, 201);
   const outbound = await outboundResponse.json();
@@ -291,6 +293,7 @@ test("inventory operations are linked to durable admin and employee system logs"
     locationId: product.locationId,
     cases: 1,
     actualOccurredAt,
+    note: "拆件安装",
   }, adminCookie);
   assert.equal(splitResponse.status, 201);
   const split = await splitResponse.json();
@@ -317,6 +320,7 @@ test("inventory operations are linked to durable admin and employee system logs"
         locationId: product.locationId,
         cases: 3,
         loose: 2,
+        note: "库存盘点补录",
         actualOccurredAt,
       },
     },
@@ -333,6 +337,7 @@ test("inventory operations are linked to durable admin and employee system logs"
         locationId: product.locationId,
         cases: 1,
         loose: 1,
+        note: "售后寄件",
         actualOccurredAt,
       },
     },
@@ -368,6 +373,7 @@ test("inventory operations are linked to durable admin and employee system logs"
         casesSplit: 1,
         perCase: 4,
         looseAdded: 4,
+        note: "拆件安装",
         actualOccurredAt,
       },
     },

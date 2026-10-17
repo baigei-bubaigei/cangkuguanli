@@ -168,6 +168,22 @@ function parseSheet(name, sheet) {
     .filter(([field]) => !availableFields.has(field))
     .map(([, label]) => label);
   if (missingHeaders.length) issues.push(`缺少列：${missingHeaders.join("、")}`);
+  const unsupportedHeaders = columns
+    .filter((column) => column.header.trim() && !column.field && column.header.trim() !== "数量")
+    .map((column) => column.header.trim());
+  if (unsupportedHeaders.length) {
+    issues.push(`存在不支持的列：${[...new Set(unsupportedHeaders)].join("、")}`);
+  }
+  const dataInUnnamedColumns = columns.filter((column) => (
+    !column.header.trim()
+    && dataRows.some(({ cells }) => {
+      const cell = cells.find((candidate) => candidate.columnIndex === column.columnIndex);
+      return cell && (!isBlank(cell.rawValue) || !isBlank(cell.displayValue));
+    })
+  ));
+  for (const column of dataInUnnamedColumns) {
+    issues.push(`第 ${column.columnIndex + 1} 列（表头空白）包含数据，请修正表头后重新上传。`);
+  }
   if (columns.some((column) => column.header.trim() === "数量")) {
     issues.push("“数量”列含义未确认；解析仅保留原始值，不将其解释为整件数或散个数。");
   }

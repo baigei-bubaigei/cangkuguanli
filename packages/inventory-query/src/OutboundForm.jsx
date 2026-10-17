@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
+import { productOptionLabel } from "./productOptionLabel.js";
 
 function localDateTimeNow() {
   const now = new Date();
@@ -17,6 +18,7 @@ export default function OutboundForm({ products, initialProductId, initialLocati
   const [cases, setCases] = useState("0");
   const [loose, setLoose] = useState("0");
   const [actualOccurredAt, setActualOccurredAt] = useState(localDateTimeNow);
+  const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const submissionRef = useRef(null);
@@ -51,6 +53,7 @@ export default function OutboundForm({ products, initialProductId, initialLocati
         cases: caseCount,
         loose: looseCount,
         actualOccurredAt: new Date(actualOccurredAt).toISOString(),
+        note,
       };
       const response = await fetch("/api/inventory/outbound", inventoryMutationOptions(
         submissionRef,
@@ -88,7 +91,7 @@ export default function OutboundForm({ products, initialProductId, initialLocati
             <span>产品规格</span>
             <select value={productSpecId} onChange={handleProductChange} required>
               {products.map((product) => (
-                <option key={product.id} value={product.id}>{product.name} · {product.spec}</option>
+                <option key={product.id} value={product.id}>{productOptionLabel(product)}</option>
               ))}
             </select>
           </label>
@@ -118,6 +121,10 @@ export default function OutboundForm({ products, initialProductId, initialLocati
           <label>
             <span>实际发生时间</span>
             <input type="datetime-local" value={actualOccurredAt} onChange={(event) => setActualOccurredAt(event.target.value)} required />
+          </label>
+          <label>
+            <span>备注（选填）</span>
+            <input type="text" value={note} onChange={(event) => setNote(event.target.value)} />
           </label>
           {error && <p className="inventory-query-outbound-error" role="alert">{error}</p>}
           <div className="inventory-query-outbound-actions">

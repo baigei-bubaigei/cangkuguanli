@@ -230,6 +230,8 @@ test("inventory API preserves empty and zero states and shares cross-location to
 
   const product = {
     name: accountPrefix + " 跨仓库存",
+    material: "铝合金",
+    color: "白色",
     category: "木制品",
     categoryName: "家具",
     spec: "四个一件",
@@ -294,6 +296,8 @@ test("inventory API preserves empty and zero states and shares cross-location to
   const crossWarehouseSummary = adminInventory.products.find((item) => item.id === createdProduct.id);
   assert.deepEqual({
     name: crossWarehouseSummary.name,
+    material: crossWarehouseSummary.material,
+    color: crossWarehouseSummary.color,
     category: crossWarehouseSummary.category,
     categoryName: crossWarehouseSummary.categoryName,
     spec: crossWarehouseSummary.spec,
@@ -309,6 +313,8 @@ test("inventory API preserves empty and zero states and shares cross-location to
     })),
   }, {
     name: product.name,
+    material: product.material,
+    color: product.color,
     category: product.category,
     categoryName: product.categoryName,
     spec: product.spec,
@@ -449,6 +455,7 @@ test("admin and employee inbound transactions save inventory and account context
     locationId: employeeInbound.locationId,
     cases: employeeInbound.cases,
     loose: employeeInbound.loose,
+    note: employeeInbound.note,
     actualOccurredAt: employeeInbound.actualOccurredAt,
     actorAccount: employeeInbound.actorAccount,
     sourceSystem: employeeInbound.sourceSystem,
@@ -460,6 +467,7 @@ test("admin and employee inbound transactions save inventory and account context
     locationId: createdProduct.locationId,
     cases: 2,
     loose: 3,
+    note: "",
     actualOccurredAt: employeeOccurredAt,
     actorAccount: employeeAccount,
     sourceSystem: "employee",
@@ -472,6 +480,7 @@ test("admin and employee inbound transactions save inventory and account context
     ...basePayload,
     cases: 1,
     loose: 0,
+    note: "",
     actualOccurredAt: adminOccurredAt,
   }, adminCookie);
   assert.equal(adminInboundResponse.status, 201);
@@ -486,6 +495,7 @@ test("admin and employee inbound transactions save inventory and account context
     locationId: createdProduct.locationId,
     cases: 1,
     loose: 0,
+    note: "",
     actualOccurredAt: adminOccurredAt,
     recordedAt: (await pool.query(
       `SELECT recorded_at FROM inventory_transactions
@@ -642,6 +652,7 @@ test("admin and employee outbound transactions reject shortages and save shared 
   }, employeeCookie);
   assert.equal(employeeResponse.status, 201);
   const employeeOutbound = await employeeResponse.json();
+  assert.equal(employeeOutbound.note, "");
   assert.deepEqual({
     operationType: employeeOutbound.operationType,
     productSpecId: employeeOutbound.productSpecId,
@@ -675,6 +686,7 @@ test("admin and employee outbound transactions reject shortages and save shared 
   }, adminCookie);
   assert.equal(adminResponse.status, 201);
   const adminOutbound = await adminResponse.json();
+  assert.equal(adminOutbound.note, "");
   assert.deepEqual({
     operationType: adminOutbound.operationType,
     cases: adminOutbound.cases,
@@ -847,6 +859,7 @@ test("admin and employee split cases using the saved per-case quantity", async (
   }, employeeCookie);
   assert.equal(employeeResponse.status, 201);
   const employeeSplit = await employeeResponse.json();
+  assert.equal(employeeSplit.note, "");
   assert.deepEqual({
     operationType: employeeSplit.operationType,
     productSpecId: employeeSplit.productSpecId,
@@ -880,6 +893,7 @@ test("admin and employee split cases using the saved per-case quantity", async (
   }, adminCookie);
   assert.equal(adminResponse.status, 201);
   const adminSplit = await adminResponse.json();
+  assert.equal(adminSplit.note, "");
   assert.deepEqual({
     operationType: adminSplit.operationType,
     casesSplit: adminSplit.casesSplit,
