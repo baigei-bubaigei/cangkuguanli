@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import InboundForm from "./InboundForm.jsx";
+import MoveForm from "./MoveForm.jsx";
 import OutboundForm from "./OutboundForm.jsx";
 import SplitForm from "./SplitForm.jsx";
 import "./inventory-query.css";
@@ -11,6 +12,7 @@ export default function InventoryQuery() {
   const [warehouse, setWarehouse] = useState("");
   const [expandedProductId, setExpandedProductId] = useState(null);
   const [inboundContext, setInboundContext] = useState(null);
+  const [moveContext, setMoveContext] = useState(null);
   const [outboundContext, setOutboundContext] = useState(null);
   const [splitContext, setSplitContext] = useState(null);
 
@@ -85,6 +87,7 @@ export default function InventoryQuery() {
           onClick={() => {
             setOutboundContext(null);
             setSplitContext(null);
+            setMoveContext(null);
             setInboundContext({});
           }}
         >
@@ -97,6 +100,7 @@ export default function InventoryQuery() {
           onClick={() => {
             setInboundContext(null);
             setSplitContext(null);
+            setMoveContext(null);
             setOutboundContext({});
           }}
         >
@@ -109,10 +113,24 @@ export default function InventoryQuery() {
           onClick={() => {
             setInboundContext(null);
             setOutboundContext(null);
+            setMoveContext(null);
             setSplitContext({});
           }}
         >
           登记拆件
+        </button>
+        <button
+          className="button button-outline"
+          type="button"
+          disabled={!inventory.products.length}
+          onClick={() => {
+            setInboundContext(null);
+            setOutboundContext(null);
+            setSplitContext(null);
+            setMoveContext({});
+          }}
+        >
+          移动货位
         </button>
       </div>
 
@@ -250,6 +268,21 @@ export default function InventoryQuery() {
                                     >
                                       入库
                                     </button>
+                                    <button
+                                      className="inventory-query-move-toggle"
+                                      type="button"
+                                      onClick={() => {
+                                        setInboundContext(null);
+                                        setOutboundContext(null);
+                                        setSplitContext(null);
+                                        setMoveContext({
+                                          productId: product.id,
+                                          sourceLocationId: location.id,
+                                        });
+                                      }}
+                                    >
+                                      移库
+                                    </button>
                                   </span>
                                 </div>
                               ))}
@@ -286,6 +319,18 @@ export default function InventoryQuery() {
           onClose={() => setOutboundContext(null)}
           onSaved={async () => {
             setOutboundContext(null);
+            await loadInventory();
+          }}
+        />
+      )}
+      {moveContext && (
+        <MoveForm
+          products={inventory.products}
+          initialProductId={moveContext.productId}
+          initialSourceLocationId={moveContext.sourceLocationId}
+          onClose={() => setMoveContext(null)}
+          onSaved={async () => {
+            setMoveContext(null);
             await loadInventory();
           }}
         />

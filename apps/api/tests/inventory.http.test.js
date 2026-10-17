@@ -132,6 +132,17 @@ function requestSplit(transaction, cookie) {
   });
 }
 
+function requestMove(transaction, cookie) {
+  return request("/api/inventory/move", {
+    method: "POST",
+    headers: {
+      ...(cookie ? { Cookie: cookie } : {}),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(transaction),
+  });
+}
+
 before(async () => {
   const migrations = spawnSync(process.execPath, [migrationCli], {
     cwd: apiDirectory,
@@ -924,6 +935,245 @@ test("admin and employee split cases using the saved per-case quantity", async (
       casesSplit: 1,
       looseAdded: 6,
       actualOccurredAt: adminOccurredAt,
+      actorAccount: adminAccount,
+      sourceSystem: "admin",
+      recordedAtIsPresent: true,
+    },
+  ]);
+});
+
+test("admin and employee move stock between locations atomically and keep both details consistent", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const employeeCookie = await login("employee", employeeAccount);
+  const product = {
+    name: accountPrefix + " 移库测试",
+    category: "木制品",
+    categoryName: "家具",
+    spec: "四个一件",
+    perCase: 4,
+    note: "",
+    warehouse: accountPrefix + " 移库仓库 A",
+    spot: "A 位",
+  };
+  productNames.add(product.name);
+  warehouseNames.add(product.warehouse);
+  const createdResponse = await requestProduct(product, adminCookie);
+  assert.equal(createdResponse.status, 201);
+  const createdProduct = await createdResponse.json();
+
+  const targetLocation = {
+    productSpecId: createdProduct.id,
+    warehouse: accountPrefix + " 移库仓库 B",
+    spot: "B 位",
+  };
+  warehouseNames.add(targetLocation.warehouse);
+  const targetResponse = await requestLocation(targetLocation, employeeCookie);
+  assert.equal(targetResponse.status, 201);
+  const createdTarget = await targetResponse.json();
+
+  const otherProduct = {
+    ...product,
+    name: accountPrefix + " 移库其他规格",
+    warehouse: accountPrefix + " 移库仓库 C",
+  };
+  productNames.add(otherProduct.name);
+  warehouseNames.add(otherProduct.warehouse);
+  const otherProductResponse = await requestProduct(otherProduct, employeeCookie);
+  assert.equal(otherProductResponse.status, 201);
+  const otherCreatedProduct = await otherProductResponse.json();
+
+  await pool.query(
+    `UPDATE product_spec_locations
+        SET case_count = 3, loose_count = 1
+      WHERE product_spec_id = $1 AND location_id = $2`,
+    [createdProduct.id, createdProduct.locationId],
+  );
+  await pool.query(
+    `UPDATE product_spec_locations
+        SET case_count = 0, loose_count = 8
+      WHERE product_spec_id = $1 AND location_id = $2`,
+    [createdProduct.id, createdTarget.locationId],
+  );
+
+  const basePayload = {
+    productSpecId: createdProduct.id,
+    sourceLocationId: createdProduct.locationId,
+    targetLocationId: createdTarget.locationId,
+    cases: 1,
+    loose: 1,
+    actualOccurredAt: "2026-10-12T09:00:00.000Z",
+    note: "整理货位",
+  };
+
+  const anonymousResponse = await requestMove(basePayload);
+  assert.equal(anonymousResponse.status, 401);
+
+  for (const payload of [
+    { ...basePayload, cases: 0, loose: 0 },
+    { ...basePayload, cases: -1 },
+    { ...basePayload, loose: 1.5 },
+    { ...basePayload, targetLocationId: basePayload.sourceLocationId },
+    { ...basePayload, actualOccurredAt: "不是实际时间" },
+  ]) {
+    const response = await requestMove(payload, employeeCookie);
+    assert.equal(response.status, 400);
+  }
+
+  const invalidLocations = [
+    { ...basePayload, sourceLocationId: otherCreatedProduct.locationId },
+    { ...basePayload, targetLocationId: otherCreatedProduct.locationId },
+    { ...basePayload, sourceLocationId: "999999999999" },
+    { ...basePayload, targetLocationId: "999999999999" },
+  ];
+  for (const payload of invalidLocations) {
+    const response = await requestMove(payload, adminCookie);
+    assert.equal(response.status, 404);
+  }
+
+  for (const payload of [
+    { ...basePayload, cases: 4, loose: 0 },
+    { ...basePayload, cases: 0, loose: 2 },
+  ]) {
+    const response = await requestMove(payload, employeeCookie);
+    assert.equal(response.status, 409);
+  }
+
+  const unchangedLocations = await pool.query(
+    `SELECT location_id, case_count, loose_count
+       FROM product_spec_locations
+      WHERE product_spec_id = $1
+        AND location_id = ANY($2::BIGINT[])
+      ORDER BY location_id`,
+    [createdProduct.id, [createdProduct.locationId, createdTarget.locationId]],
+  );
+  assert.deepEqual(unchangedLocations.rows.map(({ case_count, loose_count }) => ({ case_count, loose_count })), [
+    { case_count: 3, loose_count: 1 },
+    { case_count: 0, loose_count: 8 },
+  ]);
+  const noPartialMoveRecords = await pool.query(
+    `SELECT COUNT(*)::INTEGER AS count
+       FROM inventory_transactions
+      WHERE product_spec_id = $1 AND operation_type = 'move'`,
+    [createdProduct.id],
+  );
+  assert.equal(noPartialMoveRecords.rows[0].count, 0);
+
+  const employeeMoveResponse = await requestMove(basePayload, employeeCookie);
+  assert.equal(employeeMoveResponse.status, 201);
+  const employeeMove = await employeeMoveResponse.json();
+  assert.deepEqual({
+    operationType: employeeMove.operationType,
+    productSpecId: employeeMove.productSpecId,
+    sourceLocationId: employeeMove.sourceLocationId,
+    targetLocationId: employeeMove.targetLocationId,
+    cases: employeeMove.cases,
+    loose: employeeMove.loose,
+    note: employeeMove.note,
+    actualOccurredAt: employeeMove.actualOccurredAt,
+    actorAccount: employeeMove.actorAccount,
+    sourceSystem: employeeMove.sourceSystem,
+    sourceCases: employeeMove.sourceCases,
+    sourceLoose: employeeMove.sourceLoose,
+    targetCases: employeeMove.targetCases,
+    targetLoose: employeeMove.targetLoose,
+  }, {
+    operationType: "move",
+    productSpecId: createdProduct.id,
+    sourceLocationId: createdProduct.locationId,
+    targetLocationId: createdTarget.locationId,
+    cases: 1,
+    loose: 1,
+    note: "整理货位",
+    actualOccurredAt: basePayload.actualOccurredAt,
+    actorAccount: employeeAccount,
+    sourceSystem: "employee",
+    sourceCases: 2,
+    sourceLoose: 0,
+    targetCases: 1,
+    targetLoose: 9,
+  });
+
+  const adminMoveResponse = await requestMove({
+    ...basePayload,
+    sourceLocationId: createdTarget.locationId,
+    targetLocationId: createdProduct.locationId,
+    cases: 1,
+    loose: 0,
+    actualOccurredAt: "2026-10-12T09:05:00.000Z",
+    note: "复核后移回",
+  }, adminCookie);
+  assert.equal(adminMoveResponse.status, 201);
+  const adminMove = await adminMoveResponse.json();
+  assert.equal(adminMove.sourceSystem, "admin");
+  assert.equal(adminMove.actorAccount, adminAccount);
+  assert.deepEqual({
+    sourceCases: adminMove.sourceCases,
+    sourceLoose: adminMove.sourceLoose,
+    targetCases: adminMove.targetCases,
+    targetLoose: adminMove.targetLoose,
+  }, {
+    sourceCases: 0,
+    sourceLoose: 9,
+    targetCases: 3,
+    targetLoose: 0,
+  });
+
+  const adminInventoryResponse = await requestInventory(adminCookie);
+  const employeeInventoryResponse = await requestInventory(employeeCookie);
+  assert.equal(adminInventoryResponse.status, 200);
+  assert.equal(employeeInventoryResponse.status, 200);
+  const adminInventory = await adminInventoryResponse.json();
+  const employeeInventory = await employeeInventoryResponse.json();
+  assert.deepEqual(employeeInventory, adminInventory);
+  const savedProduct = adminInventory.products.find((item) => item.id === createdProduct.id);
+  assert.equal(savedProduct.totalCases, 3);
+  assert.equal(savedProduct.totalLoose, 9);
+  assert.deepEqual(savedProduct.locations.map(({ id, cases, loose }) => ({ id, cases, loose })), [
+    { id: createdProduct.locationId, cases: 3, loose: 0 },
+    { id: createdTarget.locationId, cases: 0, loose: 9 },
+  ]);
+
+  const moveRecords = await pool.query(
+    `SELECT operation_type, location_id, target_location_id, case_count, loose_count,
+            note, actual_occurred_at, actor_account, source_system, recorded_at
+       FROM inventory_transactions
+      WHERE product_spec_id = $1 AND operation_type = 'move'
+      ORDER BY id`,
+    [createdProduct.id],
+  );
+  assert.equal(moveRecords.rowCount, 2);
+  assert.deepEqual(moveRecords.rows.map((row) => ({
+    operationType: row.operation_type,
+    sourceLocationId: String(row.location_id),
+    targetLocationId: String(row.target_location_id),
+    cases: row.case_count,
+    loose: row.loose_count,
+    note: row.note,
+    actualOccurredAt: row.actual_occurred_at.toISOString(),
+    actorAccount: row.actor_account,
+    sourceSystem: row.source_system,
+    recordedAtIsPresent: row.recorded_at instanceof Date,
+  })), [
+    {
+      operationType: "move",
+      sourceLocationId: createdProduct.locationId,
+      targetLocationId: createdTarget.locationId,
+      cases: 1,
+      loose: 1,
+      note: "整理货位",
+      actualOccurredAt: basePayload.actualOccurredAt,
+      actorAccount: employeeAccount,
+      sourceSystem: "employee",
+      recordedAtIsPresent: true,
+    },
+    {
+      operationType: "move",
+      sourceLocationId: createdTarget.locationId,
+      targetLocationId: createdProduct.locationId,
+      cases: 1,
+      loose: 0,
+      note: "复核后移回",
+      actualOccurredAt: "2026-10-12T09:05:00.000Z",
       actorAccount: adminAccount,
       sourceSystem: "admin",
       recordedAtIsPresent: true,
