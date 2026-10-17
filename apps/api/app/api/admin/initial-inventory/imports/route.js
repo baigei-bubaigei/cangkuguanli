@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 
 const maximumQuantity = 2147483647;
 
-function invalidRequest(message = "请检查初始库存行中的产品、包装规格、仓库、货位和数量。") {
-  return NextResponse.json({ error: message }, { status: 400 });
+function invalidRequest(message, batchId, status = 400) {
+  return NextResponse.json({ error: message, batchId }, { status });
 }
 
 function normalizedIdentityText(value) {
@@ -151,6 +151,38 @@ async function locationId(client, row, specId) {
   )).rows[0].id;
 }
 
+async function recordImportBatch(client, actor, batchId, result, receivedRows, importedRows, error = null) {
+  await client.query("BEGIN");
+  try {
+    await writeOperationLog(client, {
+      actor,
+      operationType: "initial_inventory_import",
+      targetType: "initial_inventory_import_batch",
+      targetId: batchId,
+      content: {
+        batchId,
+        result,
+        receivedRows,
+        importedRows,
+        ...(error ? { error } : {}),
+      },
+    });
+    await client.query("COMMIT");
+    return true;
+  } catch {
+    await client.query("ROLLBACK");
+    return false;
+  }
+}
+
+async function failedImportResponse(client, actor, batchId, receivedRows, message, status = 400) {
+  const logged = await recordImportBatch(client, actor, batchId, "failed", receivedRows, 0, message);
+  if (!logged) {
+    return NextResponse.json({ error: "初始库存提交失败，未登记。", batchId }, { status: 500 });
+  }
+  return invalidRequest(message, batchId, status);
+}
+
 export async function POST(request) {
   const actor = await currentCatalogActor(request);
   if (!actor) {
@@ -163,21 +195,47 @@ export async function POST(request) {
     return NextResponse.json({ error: "只有管理员可以导入初始库存。" }, { status: 403 });
   }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return invalidRequest();
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body)) return invalidRequest();
-
-  const prepared = prepareRows(body.rows);
-  if (!prepared) return invalidRequest("文件没有可提交的库存行。");
-  if (prepared.error) return invalidRequest(prepared.error);
-
   const client = await database().connect();
+  let batchId;
+  let receivedRows = null;
+  let transactionOpen = false;
   try {
+    const batchResult = await client.query("SELECT nextval('initial_inventory_import_batch_id_seq')::TEXT AS id");
+    batchId = batchResult.rows[0].id;
+
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return await failedImportResponse(
+        client,
+        actor,
+        batchId,
+        receivedRows,
+        "请检查初始库存文件内容后重新上传。",
+      );
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return await failedImportResponse(
+        client,
+        actor,
+        batchId,
+        receivedRows,
+        "请检查初始库存行中的产品、包装规格、仓库、货位和数量。",
+      );
+    }
+
+    receivedRows = Array.isArray(body.rows) ? body.rows.length : null;
+    const prepared = prepareRows(body.rows);
+    if (!prepared) {
+      return await failedImportResponse(client, actor, batchId, receivedRows, "文件没有可提交的库存行。");
+    }
+    if (prepared.error) {
+      return await failedImportResponse(client, actor, batchId, receivedRows, prepared.error);
+    }
+
     await client.query("BEGIN");
+    transactionOpen = true;
     const actualOccurredAt = new Date();
     for (const row of prepared.groups) {
       const specId = await productSpecId(client, row);
@@ -201,7 +259,15 @@ export async function POST(request) {
       );
       if (!inventoryResult.rowCount) {
         await client.query("ROLLBACK");
-        return NextResponse.json({ error: "导入数量超出该货位可保存范围，整批未登记。" }, { status: 409 });
+        transactionOpen = false;
+        return await failedImportResponse(
+          client,
+          actor,
+          batchId,
+          receivedRows,
+          "导入数量超出该货位可保存范围，整批未登记。",
+          409,
+        );
       }
 
       const transactionResult = await client.query(
@@ -219,6 +285,7 @@ export async function POST(request) {
         targetType: "inventory_transaction",
         targetId: transaction.id,
         content: {
+          batchId,
           productSpecId: String(specId),
           perCase: row.perCase,
           warehouse: row.warehouse,
@@ -230,14 +297,45 @@ export async function POST(request) {
       });
     }
 
+    await writeOperationLog(client, {
+      actor,
+      operationType: "initial_inventory_import",
+      targetType: "initial_inventory_import_batch",
+      targetId: batchId,
+      content: {
+        batchId,
+        result: "success",
+        receivedRows,
+        importedRows: prepared.groups.length,
+      },
+    });
     await client.query("COMMIT");
+    transactionOpen = false;
     return NextResponse.json({
-      receivedRows: body.rows.length,
+      batchId,
+      receivedRows,
       importedRows: prepared.groups.length,
     }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch {
-    await client.query("ROLLBACK");
-    return NextResponse.json({ error: "初始库存整批提交失败，未登记。请检查数据库连接后重试。" }, { status: 500 });
+    if (transactionOpen) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
+    }
+    if (batchId) {
+      await recordImportBatch(
+        client,
+        actor,
+        batchId,
+        "failed",
+        receivedRows,
+        0,
+        "初始库存整批提交失败，未登记。请检查数据库连接后重试。",
+      );
+    }
+    return NextResponse.json({
+      error: "初始库存整批提交失败，未登记。请检查数据库连接后重试。",
+      ...(batchId ? { batchId } : {}),
+    }, { status: 500 });
   } finally {
     client.release();
   }

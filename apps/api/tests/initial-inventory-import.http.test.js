@@ -242,7 +242,12 @@ test("admin submits grouped initial inventory and appends to manual and earlier 
 
   const firstImport = await postJson("/api/admin/initial-inventory/imports", { rows: importRows }, adminCookie);
   assert.equal(firstImport.status, 201);
-  assert.deepEqual(await firstImport.json(), { receivedRows: 7, importedRows: 5 });
+  const firstImportResult = await firstImport.json();
+  assert.deepEqual(
+    { receivedRows: firstImportResult.receivedRows, importedRows: firstImportResult.importedRows },
+    { receivedRows: 7, importedRows: 5 },
+  );
+  assert.match(firstImportResult.batchId, /^\d+$/);
 
   const catalogResponse = await request("/api/catalog/products", { headers: { Cookie: adminCookie } });
   assert.equal(catalogResponse.status, 200);
@@ -272,6 +277,9 @@ test("admin submits grouped initial inventory and appends to manual and earlier 
 
   const repeatImport = await postJson("/api/admin/initial-inventory/imports", { rows: importRows }, adminCookie);
   assert.equal(repeatImport.status, 201);
+  const repeatImportResult = await repeatImport.json();
+  assert.match(repeatImportResult.batchId, /^\d+$/);
+  assert.notEqual(repeatImportResult.batchId, firstImportResult.batchId);
   const afterRepeat = await request("/api/catalog/products", { headers: { Cookie: adminCookie } });
   const repeatedCatalog = await afterRepeat.json();
   const repeatedSixPack = repeatedCatalog.find((product) => product.id === existingProduct.id);
@@ -286,12 +294,41 @@ test("admin submits grouped initial inventory and appends to manual and earlier 
   const importLogs = await queryDatabase(
     `SELECT operation_type, source_system, operation_content
        FROM system_operation_logs
-      WHERE actor_account_snapshot = $1 AND operation_type = 'initial_inventory_import'
+      WHERE actor_account_snapshot = $1
+        AND operation_type = 'initial_inventory_import'
+        AND target_type = 'inventory_transaction'
       ORDER BY id`,
     [adminAccount],
   );
   assert.equal(importLogs.rowCount, 10);
   assert.deepEqual(importLogs.rows[0].operation_content.sourceRows, [1, 2]);
+  assert.equal(importLogs.rows[0].operation_content.batchId, firstImportResult.batchId);
+
+  const batchLogs = await queryDatabase(
+    `SELECT target_id::text AS batch_id, source_system,
+            actor_admin_account_id::text AS actor_admin_id,
+            actor_employee_account_id::text AS actor_employee_id,
+            actor_account_snapshot, operation_content, recorded_at
+       FROM system_operation_logs
+      WHERE actor_account_snapshot = $1
+        AND operation_type = 'initial_inventory_import'
+        AND target_type = 'initial_inventory_import_batch'
+      ORDER BY id`,
+    [adminAccount],
+  );
+  assert.equal(batchLogs.rowCount, 2);
+  assert.deepEqual(batchLogs.rows.map((row) => row.batch_id), [firstImportResult.batchId, repeatImportResult.batchId]);
+  for (const batchLog of batchLogs.rows) {
+    assert.equal(batchLog.source_system, "admin");
+    assert.ok(batchLog.actor_admin_id);
+    assert.equal(batchLog.actor_employee_id, null);
+    assert.equal(batchLog.actor_account_snapshot, adminAccount);
+    assert.equal(batchLog.operation_content.batchId, batchLog.batch_id);
+    assert.equal(batchLog.operation_content.result, "success");
+    assert.equal(batchLog.operation_content.receivedRows, 7);
+    assert.equal(batchLog.operation_content.importedRows, 5);
+    assert.ok(batchLog.recorded_at instanceof Date);
+  }
 });
 
 test("initial import reuses the target product's manually recorded same-named location", async () => {
@@ -378,12 +415,36 @@ test("invalid rows reject the entire batch and a stock capacity conflict rolls b
     ],
   }, adminCookie);
   assert.equal(invalidResponse.status, 400);
+  const invalidResult = await invalidResponse.json();
+  assert.match(invalidResult.batchId, /^\d+$/);
 
   const invalidBatchProducts = await queryDatabase(
     "SELECT count(*)::integer AS count FROM product_specs WHERE product_name = $1",
     [`${accountPrefix}-不会写入`],
   );
   assert.equal(invalidBatchProducts.rows[0].count, 0);
+  const invalidBatchLog = await queryDatabase(
+    `SELECT source_system, actor_account_snapshot, operation_content, recorded_at
+       FROM system_operation_logs
+      WHERE target_type = 'initial_inventory_import_batch'
+        AND target_id = $1`,
+    [invalidResult.batchId],
+  );
+  assert.equal(invalidBatchLog.rowCount, 1);
+  assert.equal(invalidBatchLog.rows[0].source_system, "admin");
+  assert.equal(invalidBatchLog.rows[0].actor_account_snapshot, adminAccount);
+  assert.equal(invalidBatchLog.rows[0].operation_content.result, "failed");
+  assert.equal(invalidBatchLog.rows[0].operation_content.importedRows, 0);
+  assert.ok(invalidBatchLog.rows[0].recorded_at instanceof Date);
+  const invalidBatchSuccess = await queryDatabase(
+    `SELECT count(*)::integer AS count
+       FROM system_operation_logs
+      WHERE target_type = 'initial_inventory_import_batch'
+        AND target_id = $1
+        AND operation_content->>'result' = 'success'`,
+    [invalidResult.batchId],
+  );
+  assert.equal(invalidBatchSuccess.rows[0].count, 0);
 
   const boundaryResponse = await postJson("/api/catalog/products", {
     name: `${accountPrefix}-库存上限`,
@@ -408,6 +469,7 @@ test("invalid rows reject the entire batch and a stock capacity conflict rolls b
     ],
   }, adminCookie);
   assert.equal(rollbackResponse.status, 409);
+  const rollbackResult = await rollbackResponse.json();
 
   const rolledBackProduct = await queryDatabase(
     "SELECT count(*)::integer AS count FROM product_specs WHERE product_name = $1",
@@ -428,4 +490,17 @@ test("invalid rows reject the entire batch and a stock capacity conflict rolls b
     [boundaryProduct.id, boundaryProduct.locationId],
   );
   assert.equal(unchangedMaximum.rows[0].case_count, 2147483647);
+  const rollbackBatchLog = await queryDatabase(
+    `SELECT source_system, actor_account_snapshot, operation_content, recorded_at
+       FROM system_operation_logs
+      WHERE target_type = 'initial_inventory_import_batch'
+        AND target_id = $1`,
+    [rollbackResult.batchId],
+  );
+  assert.equal(rollbackBatchLog.rowCount, 1);
+  assert.equal(rollbackBatchLog.rows[0].source_system, "admin");
+  assert.equal(rollbackBatchLog.rows[0].actor_account_snapshot, adminAccount);
+  assert.equal(rollbackBatchLog.rows[0].operation_content.result, "failed");
+  assert.equal(rollbackBatchLog.rows[0].operation_content.importedRows, 0);
+  assert.ok(rollbackBatchLog.rows[0].recorded_at instanceof Date);
 });

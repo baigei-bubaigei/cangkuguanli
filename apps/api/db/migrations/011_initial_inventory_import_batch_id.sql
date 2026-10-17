@@ -1,0 +1,1 @@
+CREATE SEQUENCE initial_inventory_import_batch_id_seq;
