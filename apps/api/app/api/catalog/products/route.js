@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { hasCatalogSession } from "../../../../src/auth/catalog-auth.js";
+import { currentCatalogActor, hasCatalogSession } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
+import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -19,12 +20,17 @@ function requiredText(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function identityText(value) {
+  if (value === undefined || value === null) return "";
+  return typeof value === "string" ? value.trim() : undefined;
+}
+
 function optionalText(value) {
   if (value === undefined || value === null) return null;
   return typeof value === "string" ? value : undefined;
 }
 
-const productSelect = `SELECT p.id, l.id AS location_id, p.product_name, p.category, p.category_name, p.spec,
+const productSelect = `SELECT p.id, l.id AS location_id, p.product_name, p.material, p.color, p.category, p.category_name, p.spec,
                               p.per_case_count, p.note, w.name AS warehouse, l.name AS spot,
                               sl.case_count, sl.loose_count
                          FROM product_specs p
@@ -37,6 +43,8 @@ function productFields(row) {
     id: String(row.id),
     locationId: String(row.location_id),
     name: row.product_name,
+    material: row.material,
+    color: row.color,
     category: row.category,
     categoryName: row.category_name,
     spec: row.spec,
@@ -64,7 +72,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  if (!await hasCatalogSession(request)) return unauthorized();
+  const actor = await currentCatalogActor(request);
+  if (!actor) return unauthorized();
 
   let body;
   try {
@@ -74,15 +83,18 @@ export async function POST(request) {
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) return invalidRequest();
 
-  const name = requiredText(body.name);
-  const spec = requiredText(body.spec);
+  const name = identityText(body.name);
+  const material = identityText(body.material);
+  const color = identityText(body.color);
+  const spec = identityText(body.spec);
   const warehouse = requiredText(body.warehouse);
   const spot = requiredText(body.spot);
   const category = optionalText(body.category);
   const categoryName = optionalText(body.categoryName);
   const note = optionalText(body.note);
   const perCase = Number(body.perCase);
-  if (!name || !spec || !warehouse || !spot
+  if (name === undefined || material === undefined || color === undefined || spec === undefined
+    || !warehouse || !spot
     || category === undefined || categoryName === undefined || note === undefined
     || !Number.isInteger(perCase) || ![2, 4, 6].includes(perCase)) {
     return invalidRequest();
@@ -91,11 +103,22 @@ export async function POST(request) {
   const client = await database().connect();
   try {
     await client.query("BEGIN");
+    const existingVariant = await client.query(
+      `SELECT id FROM product_specs
+        WHERE product_name = $1 AND spec = $2 AND material = $3 AND color = $4 AND per_case_count = $5
+        LIMIT 1`,
+      [name, spec, material, color, perCase],
+    );
+    if (existingVariant.rowCount) {
+      await client.query("ROLLBACK");
+      return NextResponse.json({ error: "相同产品身份和每件个数的包装规格已存在，请为该规格新增货位。" }, { status: 409 });
+    }
+
     const productResult = await client.query(
-      `INSERT INTO product_specs (product_name, spec, category, category_name, note, per_case_count)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO product_specs (product_name, spec, material, color, category, category_name, note, per_case_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
-      [name, spec, category, categoryName, note, perCase],
+      [name, spec, material, color, category, categoryName, note, perCase],
     );
     const warehouseResult = await client.query(
       "INSERT INTO warehouses (name) VALUES ($1) RETURNING id",
@@ -114,6 +137,24 @@ export async function POST(request) {
       `${productSelect} WHERE p.id = $1 ORDER BY l.id`,
       [productResult.rows[0].id],
     );
+    await writeOperationLog(client, {
+      actor,
+      operationType: "product_spec_created",
+      targetType: "product_spec",
+      targetId: productResult.rows[0].id,
+      content: {
+        productName: name,
+        material,
+        color,
+        spec,
+        category,
+        categoryName,
+        perCaseCount: perCase,
+        note,
+        warehouse,
+        spot,
+      },
+    });
     await client.query("COMMIT");
     return NextResponse.json(productFields(result.rows[0]), {
       status: 201,
@@ -121,6 +162,9 @@ export async function POST(request) {
     });
   } catch (error) {
     await client.query("ROLLBACK");
+    if (error.code === "23505" && error.constraint === "product_specs_identity_package_unique") {
+      return NextResponse.json({ error: "相同产品身份和每件个数的包装规格已存在，请为该规格新增货位。" }, { status: 409 });
+    }
     throw error;
   } finally {
     client.release();

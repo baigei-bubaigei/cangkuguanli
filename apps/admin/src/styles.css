@@ -81,6 +81,38 @@ a { color: inherit; text-decoration: none; }
 .page-content h1 { margin: 0; color: #26362f; font-size: 26px; font-weight: 650; letter-spacing: -.035em; }
 .page-placeholder { display: grid; min-height: 190px; align-content: center; justify-items: start; gap: 14px; margin-top: 22px; padding: 24px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .page-placeholder p { max-width: 540px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.employee-accounts { display: grid; gap: 16px; margin-top: 22px; }
+.employee-accounts-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 19px 21px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.employee-accounts-toolbar h2, .employee-account-credential h3 { margin: 0 0 6px; font-size: 15px; }
+.employee-accounts-toolbar p, .employee-account-credential p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.employee-account-modal-backdrop { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 20px; background: rgb(20 35 29 / 38%); }
+.employee-account-modal { width: min(100%, 480px); padding: 22px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 20px 55px rgb(22 41 31 / 18%); }
+.employee-account-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.employee-account-modal-head h3 { margin: 0 0 5px; font-size: 17px; }
+.employee-account-modal-head p { margin: 0; color: var(--muted); font-size: 12px; }
+.employee-account-modal-close { width: 30px; height: 30px; border: 0; border-radius: 6px; color: #78867f; background: #f3f6f3; font-size: 20px; line-height: 1; }
+.employee-account-form { display: grid; gap: 16px; }
+.employee-account-form-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 2px; }
+.employee-account-cancel { min-height: 42px; padding: 0 16px; border: 1px solid #dce4df; border-radius: 7px; color: #506259; background: #fff; }
+.employee-account-form-actions .button { min-height: 42px; }
+.employee-account-message { margin: 0; color: #a33434; font-size: 13px; }
+.employee-account-credential { display: grid; gap: 13px; padding: 19px 21px; border: 1px solid #cfe1d5; border-radius: 9px; background: #f6fbf7; }
+.employee-account-credential dl { display: grid; gap: 9px; margin: 0; }
+.employee-account-credential dl div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; }
+.employee-account-credential dt { color: var(--muted); font-size: 12px; }
+.employee-account-credential dd { min-width: 0; margin: 0; color: #26362f; font-size: 13px; overflow-wrap: anywhere; }
+.employee-account-credential code { font: 600 14px ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+.employee-accounts-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.employee-accounts-table { width: 100%; border-collapse: collapse; text-align: left; }
+.employee-accounts-table th { height: 43px; padding: 0 18px; color: #87958e; background: #fafbf9; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.employee-accounts-table td { padding: 13px 18px; border-top: 1px solid #eef1ee; color: #586961; font-size: 12px; }
+.employee-accounts-table td strong { color: #2e4139; }
+.employee-account-status { display: inline-flex; padding: 4px 8px; border-radius: 12px; font-size: 10px; }
+.employee-account-status-active { color: #426852; background: #edf5ef; }
+.employee-account-status-disabled { color: #8b5a5a; background: #fbefef; }
+.employee-account-toggle { padding: 6px 10px; border: 1px solid #dce4df; border-radius: 6px; color: #405149; background: #fff; font-size: 11px; }
+.employee-account-toggle:hover:not(:disabled) { border-color: #a9c2b2; background: #f5f8f5; }
+.employee-accounts-table .employee-accounts-empty { padding: 34px 18px; color: #87958e; text-align: center; }
 .mobile-menu-button, .mobile-scrim { display: none; }
 
 @media (max-width: 760px) {
@@ -101,6 +133,14 @@ a { color: inherit; text-decoration: none; }
   .admin-topbar-name { font-size: 11px; }
   .page-content { padding: 24px 18px; }
   .page-content h1 { font-size: 23px; }
+  .employee-accounts-toolbar { align-items: stretch; flex-direction: column; padding: 17px; }
+  .employee-accounts-toolbar .button { width: 100%; }
+  .employee-account-modal { padding: 18px; }
+  .employee-account-form-actions { flex-direction: column-reverse; }
+  .employee-account-form-actions .button, .employee-account-cancel { width: 100%; }
+  .employee-account-credential { padding: 17px; }
+  .employee-account-credential dl div { grid-template-columns: 1fr; gap: 4px; }
+  .employee-accounts-table { min-width: 550px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

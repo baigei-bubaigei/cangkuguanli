@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { currentCatalogActor } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
+import {
+  claimIdempotency,
+  completeIdempotency,
+  idempotencyResponse,
+  missingIdempotencyKeyResponse,
+  requestIdempotencyKey,
+} from "../../../../src/idempotency.js";
+import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -29,27 +37,54 @@ export async function POST(request) {
       headers: { "Cache-Control": "no-store" },
     });
   }
+  const idempotencyKey = requestIdempotencyKey(request);
+  if (!idempotencyKey) return missingIdempotencyKeyResponse();
 
   let body;
+  let payload;
   try {
-    body = await request.json();
+    const rawBody = await request.text();
+    try {
+      body = JSON.parse(rawBody);
+      payload = body;
+    } catch {
+      payload = { unparsedJson: rawBody };
+    }
   } catch {
-    return invalidRequest();
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body)) return invalidRequest();
-
-  const productSpecId = requiredId(body.productSpecId);
-  const locationId = requiredId(body.locationId);
-  const actualOccurredAt = occurredAt(body.actualOccurredAt);
-  if (!productSpecId || !locationId
-    || !Number.isInteger(body.cases) || body.cases <= 0 || body.cases > 2147483647
-    || !actualOccurredAt) {
     return invalidRequest();
   }
 
   const client = await database().connect();
   try {
     await client.query("BEGIN");
+    const claim = await claimIdempotency(client, {
+      actor,
+      scope: "inventory/split",
+      key: idempotencyKey,
+      payload,
+    });
+    const priorResponse = idempotencyResponse(claim);
+    if (priorResponse) {
+      await client.query("ROLLBACK");
+      return priorResponse;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      await client.query("ROLLBACK");
+      return invalidRequest();
+    }
+
+    const productSpecId = requiredId(body.productSpecId);
+    const locationId = requiredId(body.locationId);
+    const actualOccurredAt = occurredAt(body.actualOccurredAt);
+    const note = body.note === undefined ? "" : body.note;
+    if (!productSpecId || !locationId
+      || !Number.isInteger(body.cases) || body.cases <= 0 || body.cases > 2147483647
+      || typeof note !== "string"
+      || !actualOccurredAt) {
+      await client.query("ROLLBACK");
+      return invalidRequest();
+    }
+
     const inventoryResult = await client.query(
       `SELECT sl.case_count, sl.loose_count, p.per_case_count
          FROM product_spec_locations sl
@@ -86,25 +121,39 @@ export async function POST(request) {
     );
     const transactionResult = await client.query(
       `INSERT INTO inventory_transactions (
-         operation_type, product_spec_id, location_id, case_count, loose_count,
+         operation_type, product_spec_id, location_id, case_count, loose_count, note,
          actual_occurred_at, actor_account, source_system
        )
-       VALUES ('split', $1, $2, $3, $4, $5, $6, $7)
+       VALUES ('split', $1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, actual_occurred_at, recorded_at`,
       [
         productSpecId,
         locationId,
         body.cases,
         looseAdded,
+        note,
         actualOccurredAt,
         actor.account,
         actor.sourceSystem,
       ],
     );
-    await client.query("COMMIT");
-
     const transaction = transactionResult.rows[0];
-    return NextResponse.json({
+    await writeOperationLog(client, {
+      actor,
+      operationType: "inventory_split",
+      targetType: "inventory_transaction",
+      targetId: transaction.id,
+      content: {
+        productSpecId,
+        locationId,
+        casesSplit: body.cases,
+        perCase: available.per_case_count,
+        looseAdded,
+        note,
+        actualOccurredAt: transaction.actual_occurred_at.toISOString(),
+      },
+    });
+    const responseBody = {
       transactionId: String(transaction.id),
       operationType: "split",
       productSpecId,
@@ -112,13 +161,18 @@ export async function POST(request) {
       casesSplit: body.cases,
       perCase: available.per_case_count,
       looseAdded,
+      note,
       actualOccurredAt: transaction.actual_occurred_at.toISOString(),
       recordedAt: transaction.recorded_at.toISOString(),
       actorAccount: actor.account,
       sourceSystem: actor.sourceSystem,
       locationCases: updatedInventory.rows[0].case_count,
       locationLoose: updatedInventory.rows[0].loose_count,
-    }, {
+    };
+    await completeIdempotency(client, claim.id, 201, responseBody);
+    await client.query("COMMIT");
+
+    return NextResponse.json(responseBody, {
       status: 201,
       headers: { "Cache-Control": "no-store" },
     });

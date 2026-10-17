@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import ProductCatalog from "@cangkuguanli/product-catalog";
 import InventoryQuery from "@cangkuguanli/inventory-query";
+import BusinessHistory from "@cangkuguanli/inventory-query/history";
+import SystemOperationLogs from "@cangkuguanli/system-operation-logs";
+import EmployeeAccounts from "./EmployeeAccounts.jsx";
+
+const InitialInventoryImport = lazy(() => import("./InitialInventoryImport.jsx"));
 
 const adminPages = [
   { label: "库存查询", group: "业务" },
@@ -239,8 +244,23 @@ export default function App() {
           <h1>{activePage}</h1>
           {activePage === "库存查询" ? (
             <InventoryQuery />
+          ) : activePage === "库存业务记录" ? (
+            <BusinessHistory sourceSystem="admin" />
           ) : activePage === "产品与货位" ? (
             <ProductCatalog />
+          ) : activePage === "员工账号" ? (
+            <EmployeeAccounts />
+          ) : activePage === "初始库存导入" ? (
+            <Suspense fallback={(
+              <section className="page-placeholder" aria-live="polite">
+                <span className="system-badge">管理员系统</span>
+                <p>正在读取初始库存文件预览…</p>
+              </section>
+            )}>
+              <InitialInventoryImport />
+            </Suspense>
+          ) : activePage === "系统操作日志" ? (
+            <SystemOperationLogs system="admin" />
           ) : (
             <section className="page-placeholder" aria-live="polite">
               <span className="system-badge">管理员系统</span>

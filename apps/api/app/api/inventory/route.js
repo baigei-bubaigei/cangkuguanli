@@ -16,7 +16,7 @@ export async function GET(request) {
   try {
     const [inventoryResult, warehouseResult] = await Promise.all([
       client.query(
-        `SELECT p.id, p.product_name, p.category, p.category_name, p.spec, p.per_case_count,
+        `SELECT p.id, p.product_name, p.material, p.color, p.category, p.category_name, p.spec, p.per_case_count,
                 COALESCE(SUM(sl.case_count), 0)::INTEGER AS total_cases,
                 COALESCE(SUM(sl.loose_count), 0)::INTEGER AS total_loose,
                 COALESCE(
@@ -52,6 +52,8 @@ export async function GET(request) {
       products: inventoryResult.rows.map((row) => ({
         id: String(row.id),
         name: row.product_name,
+        material: row.material,
+        color: row.color,
         category: row.category,
         categoryName: row.category_name,
         spec: row.spec,

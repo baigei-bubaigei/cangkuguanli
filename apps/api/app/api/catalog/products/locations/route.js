@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { hasCatalogSession } from "../../../../../src/auth/catalog-auth.js";
+import { currentCatalogActor } from "../../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../../src/db.js";
+import { writeOperationLog } from "../../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,8 @@ function invalidRequest() {
 }
 
 export async function POST(request) {
-  if (!await hasCatalogSession(request)) {
+  const actor = await currentCatalogActor(request);
+  if (!actor) {
     return NextResponse.json({ error: "需要登录后维护产品与货位。" }, { status: 401 });
   }
 
@@ -36,7 +38,7 @@ export async function POST(request) {
   try {
     await client.query("BEGIN");
     const productResult = await client.query(
-      "SELECT 1 FROM product_specs WHERE id = $1",
+      "SELECT product_name, material, color, spec, per_case_count FROM product_specs WHERE id = $1",
       [productSpecId],
     );
     if (!productResult.rowCount) {
@@ -74,6 +76,22 @@ export async function POST(request) {
        RETURNING case_count, loose_count`,
       [productSpecId, locationResult.rows[0].id],
     );
+    await writeOperationLog(client, {
+      actor,
+      operationType: "location_created",
+      targetType: "location",
+      targetId: locationResult.rows[0].id,
+      content: {
+        productSpecId,
+        productName: productResult.rows[0].product_name,
+        material: productResult.rows[0].material,
+        color: productResult.rows[0].color,
+        spec: productResult.rows[0].spec,
+        perCaseCount: productResult.rows[0].per_case_count,
+        warehouse,
+        spot,
+      },
+    });
     await client.query("COMMIT");
 
     return NextResponse.json({

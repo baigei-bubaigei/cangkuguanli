@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./src/InventoryQuery.jsx",
+  "exports": {
+    ".": "./src/InventoryQuery.jsx",
+    "./history": "./src/BusinessHistory.jsx",
+    "./submission": "./src/submission.js"
+  },
   "peerDependencies": {
     "react": "19.3.0"
   }

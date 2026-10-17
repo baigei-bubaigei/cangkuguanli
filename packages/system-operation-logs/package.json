@@ -1,0 +1,10 @@
+{
+  "name": "@cangkuguanli/system-operation-logs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/SystemOperationLogs.jsx",
+  "peerDependencies": {
+    "react": "19.3.0"
+  }
+}
