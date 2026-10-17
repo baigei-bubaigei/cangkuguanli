@@ -112,7 +112,21 @@ async function productSpecId(client, row) {
   return existing.rows[0].id;
 }
 
-async function locationId(client, row) {
+async function locationId(client, row, specId) {
+  const productLocation = await client.query(
+    `SELECT l.id
+       FROM product_spec_locations sl
+       JOIN locations l ON l.id = sl.location_id
+       JOIN warehouses w ON w.id = l.warehouse_id
+      WHERE sl.product_spec_id = $1
+        AND w.name = $2
+        AND l.name = $3
+      ORDER BY l.id
+      LIMIT 1`,
+    [specId, row.warehouse, row.spot],
+  );
+  if (productLocation.rowCount) return productLocation.rows[0].id;
+
   const existing = await client.query(
     `SELECT l.id
        FROM locations l
@@ -167,7 +181,7 @@ export async function POST(request) {
     const actualOccurredAt = new Date();
     for (const row of prepared.groups) {
       const specId = await productSpecId(client, row);
-      const spotId = await locationId(client, row);
+      const spotId = await locationId(client, row, specId);
       await client.query(
         `INSERT INTO product_spec_locations (product_spec_id, location_id)
          VALUES ($1, $2)

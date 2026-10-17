@@ -294,6 +294,81 @@ test("admin submits grouped initial inventory and appends to manual and earlier 
   assert.deepEqual(importLogs.rows[0].operation_content.sourceRows, [1, 2]);
 });
 
+test("initial import reuses the target product's manually recorded same-named location", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const warehouse = `${accountPrefix}-重复名称仓库`;
+  const spot = "A-01";
+  const earlierProductResponse = await postJson("/api/catalog/products", {
+    name: `${accountPrefix}-较早规格`,
+    spec: "S-1",
+    perCase: 2,
+    warehouse,
+    spot,
+  }, adminCookie);
+  assert.equal(earlierProductResponse.status, 201);
+  const earlierProduct = await earlierProductResponse.json();
+
+  const targetProductResponse = await postJson("/api/catalog/products", {
+    name: `${accountPrefix}-目标规格`,
+    spec: "S-2",
+    material: "铝合金",
+    color: "银色",
+    perCase: 4,
+    warehouse,
+    spot,
+  }, adminCookie);
+  assert.equal(targetProductResponse.status, 201);
+  const targetProduct = await targetProductResponse.json();
+  assert.notEqual(targetProduct.locationId, earlierProduct.locationId);
+
+  const duplicateLocations = await queryDatabase(
+    `SELECT w.id AS warehouse_id, l.id AS location_id
+       FROM warehouses w
+       JOIN locations l ON l.warehouse_id = w.id
+      WHERE w.name = $1 AND l.name = $2
+      ORDER BY l.id`,
+    [warehouse, spot],
+  );
+  assert.equal(duplicateLocations.rowCount, 2);
+  assert.equal(new Set(duplicateLocations.rows.map((row) => row.warehouse_id)).size, 2);
+  assert.deepEqual(
+    duplicateLocations.rows.map((row) => String(row.location_id)),
+    [earlierProduct.locationId, targetProduct.locationId],
+  );
+
+  const inboundResponse = await postJson("/api/inventory/inbound", {
+    productSpecId: targetProduct.id,
+    locationId: targetProduct.locationId,
+    cases: 2,
+    loose: 1,
+    actualOccurredAt: new Date().toISOString(),
+  }, adminCookie);
+  assert.equal(inboundResponse.status, 201);
+
+  const importResponse = await postJson("/api/admin/initial-inventory/imports", {
+    rows: [{
+      productName: `${accountPrefix}-目标规格`,
+      spec: "S-2",
+      material: "铝合金",
+      color: "银色",
+      perCase: 4,
+      warehouse,
+      spot,
+      cases: 1,
+      loose: 3,
+    }],
+  }, adminCookie);
+  assert.equal(importResponse.status, 201);
+
+  const catalogResponse = await request("/api/catalog/products", { headers: { Cookie: adminCookie } });
+  assert.equal(catalogResponse.status, 200);
+  const catalog = await catalogResponse.json();
+  const targetRows = catalog.filter((product) => product.id === targetProduct.id);
+  assert.equal(targetRows.length, 1);
+  assert.equal(targetRows[0].locationId, targetProduct.locationId);
+  assert.deepEqual({ cases: targetRows[0].cases, loose: targetRows[0].loose }, { cases: 3, loose: 4 });
+});
+
 test("invalid rows reject the entire batch and a stock capacity conflict rolls back earlier rows", async () => {
   const adminCookie = await login("admin", adminAccount);
   const invalidResponse = await postJson("/api/admin/initial-inventory/imports", {
