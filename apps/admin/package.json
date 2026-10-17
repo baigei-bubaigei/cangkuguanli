@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
-    "build": "vite build"
+    "build": "vite build",
+    "test:import": "node --test src/parseInventoryImport.test.js"
   },
   "dependencies": {
     "@cangkuguanli/inventory-query": "0.1.0",
     "@cangkuguanli/product-catalog": "0.1.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "6.1.2",
