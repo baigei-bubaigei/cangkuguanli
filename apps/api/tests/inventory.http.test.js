@@ -197,6 +197,12 @@ after(async () => {
       [[...warehouseNames]],
     );
     await pool.query("DELETE FROM warehouses WHERE name = ANY($1::text[])", [[...warehouseNames]]);
+    await pool.query(
+      `DELETE FROM system_operation_logs
+        WHERE actor_admin_account_id = (SELECT id FROM admin_accounts WHERE account = $1)
+           OR actor_employee_account_id = (SELECT id FROM employee_accounts WHERE account = $2)`,
+      [adminAccount, employeeAccount],
+    );
     await pool.query("DELETE FROM admin_accounts WHERE account = $1", [adminAccount]);
     await pool.query("DELETE FROM employee_accounts WHERE account = $1", [employeeAccount]);
     await pool.end();
