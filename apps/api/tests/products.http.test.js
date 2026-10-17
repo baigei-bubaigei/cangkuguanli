@@ -136,8 +136,8 @@ async function logsForTarget(targetType, targetId) {
 }
 
 function visibleFields(products) {
-  return products.map(({ name, category, categoryName, spec, perCase, note, warehouse, spot }) => ({
-    name, category, categoryName, spec, perCase, note, warehouse, spot,
+  return products.map(({ name, material, color, category, categoryName, spec, perCase, note, warehouse, spot }) => ({
+    name, material, color, category, categoryName, spec, perCase, note, warehouse, spot,
   }));
 }
 
@@ -242,6 +242,8 @@ test("admin and employee create and query the same persisted product specificati
   const employeeCookie = await login("employee", employeeAccount);
   const firstProduct = {
     name: `${accountPrefix} 同步商品`,
+    material: "铝合金",
+    color: "白色",
     category: "类别甲",
     categoryName: "分类名称甲",
     spec: "四个一件",
@@ -285,6 +287,8 @@ test("admin and employee create and query the same persisted product specificati
     actorDisplayName: "规格测试管理员",
     content: {
       productName: firstProduct.name,
+      material: firstProduct.material,
+      color: firstProduct.color,
       spec: firstProduct.spec,
       category: firstProduct.category,
       categoryName: firstProduct.categoryName,
@@ -305,6 +309,8 @@ test("admin and employee create and query the same persisted product specificati
 
   const secondProduct = {
     name: `${accountPrefix} 同步商品`,
+    material: "铝合金",
+    color: "白色",
     category: "类别乙",
     categoryName: "分类名称乙",
     spec: "四个一件",
@@ -345,18 +351,40 @@ test("admin and employee create and query the same persisted product specificati
   });
   assert.ok(employeeProductLogs.rows[0].recorded_at instanceof Date);
 
+  const differentMaterial = {
+    ...firstProduct,
+    material: "塑料",
+    perCase: 4,
+    warehouse: `${accountPrefix} 仓库丙`,
+    spot: "货位丙",
+  };
+  warehouseNames.add(differentMaterial.warehouse);
+  assert.equal((await requestProduct("POST", differentMaterial, employeeCookie)).status, 201);
+
+  const differentColor = {
+    ...firstProduct,
+    color: "黑色",
+    perCase: 4,
+    warehouse: `${accountPrefix} 仓库丁`,
+    spot: "货位丁",
+  };
+  warehouseNames.add(differentColor.warehouse);
+  assert.equal((await requestProduct("POST", differentColor, employeeCookie)).status, 201);
+
   const adminSeesBoth = await requestProduct("GET", undefined, adminCookie);
   assert.equal(adminSeesBoth.status, 200);
-  assert.deepEqual(visibleFields(await adminSeesBoth.json()), [firstProduct, secondProduct]);
+  assert.deepEqual(visibleFields(await adminSeesBoth.json()), [firstProduct, secondProduct, differentMaterial, differentColor]);
 });
 
 test("blank category fields remain separate and item count is limited to 2, 4, or 6", async () => {
   const employeeCookie = await login("employee", employeeAccount);
   const blankCategories = {
-    name: `${accountPrefix} 空分类商品`,
+    name: "",
+    material: "",
+    color: "",
     category: "",
     categoryName: "",
-    spec: "六个一件",
+    spec: "",
     perCase: 6,
     note: "",
     warehouse: `${accountPrefix} 空分类仓库`,
@@ -368,16 +396,35 @@ test("blank category fields remain separate and item count is limited to 2, 4, o
   assert.equal(created.status, 201);
   assert.deepEqual(visibleFields([await created.json()]), [blankCategories]);
 
+  const nullIdentityDuplicate = await requestProduct("POST", {
+    ...blankCategories,
+    name: null,
+    material: null,
+    color: null,
+    spec: null,
+    warehouse: `${accountPrefix} 不同仓库`,
+    spot: "其他货位",
+  }, employeeCookie);
+  assert.equal(nullIdentityDuplicate.status, 409);
+
   const invalidCount = await requestProduct("POST", { ...blankCategories, perCase: 3 }, employeeCookie);
   assert.equal(invalidCount.status, 400);
   assert.deepEqual(visibleFields(await (await requestProduct("GET", undefined, employeeCookie)).json()), [
     {
-      name: `${accountPrefix} 同步商品`, category: "类别甲", categoryName: "分类名称甲", spec: "四个一件", perCase: 4,
+      name: `${accountPrefix} 同步商品`, material: "铝合金", color: "白色", category: "类别甲", categoryName: "分类名称甲", spec: "四个一件", perCase: 4,
       note: "备注甲", warehouse: `${accountPrefix} 仓库甲`, spot: "货位甲",
     },
     {
-      name: `${accountPrefix} 同步商品`, category: "类别乙", categoryName: "分类名称乙", spec: "四个一件", perCase: 2,
+      name: `${accountPrefix} 同步商品`, material: "铝合金", color: "白色", category: "类别乙", categoryName: "分类名称乙", spec: "四个一件", perCase: 2,
       note: "备注乙", warehouse: `${accountPrefix} 仓库乙`, spot: "货位乙",
+    },
+    {
+      name: `${accountPrefix} 同步商品`, material: "塑料", color: "白色", category: "类别甲", categoryName: "分类名称甲", spec: "四个一件", perCase: 4,
+      note: "备注甲", warehouse: `${accountPrefix} 仓库丙`, spot: "货位丙",
+    },
+    {
+      name: `${accountPrefix} 同步商品`, material: "铝合金", color: "黑色", category: "类别甲", categoryName: "分类名称甲", spec: "四个一件", perCase: 4,
+      note: "备注甲", warehouse: `${accountPrefix} 仓库丁`, spot: "货位丁",
     },
     blankCategories,
   ]);
@@ -388,6 +435,8 @@ test("admin and employee add persisted zero-stock locations to existing specific
   const employeeCookie = await login("employee", employeeAccount);
   const product = {
     name: `${accountPrefix} 货位测试商品`,
+    material: "塑料",
+    color: "黑色",
     category: "类别",
     categoryName: "类别名称",
     spec: "四个一件",
@@ -439,7 +488,10 @@ test("admin and employee add persisted zero-stock locations to existing specific
     content: {
       productSpecId: createdProduct.id,
       productName: product.name,
+      material: product.material,
+      color: product.color,
       spec: product.spec,
+      perCaseCount: product.perCase,
       warehouse: employeeLocation.warehouse,
       spot: employeeLocation.spot,
     },
@@ -499,6 +551,8 @@ test("a failed product log rolls back the product and its initial location", asy
   const adminCookie = await login("admin", adminAccount);
   const product = {
     name: `${accountPrefix} 日志失败回滚商品`,
+    material: "不锈钢",
+    color: "银色",
     category: "类别",
     categoryName: "分类名称",
     spec: "四个一件",

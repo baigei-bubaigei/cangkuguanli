@@ -38,7 +38,7 @@ export async function POST(request) {
   try {
     await client.query("BEGIN");
     const productResult = await client.query(
-      "SELECT product_name, spec FROM product_specs WHERE id = $1",
+      "SELECT product_name, material, color, spec, per_case_count FROM product_specs WHERE id = $1",
       [productSpecId],
     );
     if (!productResult.rowCount) {
@@ -84,7 +84,10 @@ export async function POST(request) {
       content: {
         productSpecId,
         productName: productResult.rows[0].product_name,
+        material: productResult.rows[0].material,
+        color: productResult.rows[0].color,
         spec: productResult.rows[0].spec,
+        perCaseCount: productResult.rows[0].per_case_count,
         warehouse,
         spot,
       },
