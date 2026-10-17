@@ -578,17 +578,32 @@ before(async () => {
 });
 
 after(async () => {
-  await stopApi();
-  if (sourcePool) await sourcePool.end();
-  if (restoredPool) await restoredPool.end();
-  if (pgClusterInitialized && pgDataDirectoryLinux) {
-    runPostgresTool("pg_ctl", ["--pgdata", pgDataDirectoryLinux, "--wait", "--mode", "fast", "stop"]);
+  try {
+    await stopApi();
+  } finally {
+    try {
+      if (sourcePool) await sourcePool.end();
+    } finally {
+      try {
+        if (restoredPool) await restoredPool.end();
+      } finally {
+        try {
+          if (pgClusterInitialized && pgDataDirectoryLinux) {
+            runPostgresTool("pg_ctl", ["--pgdata", pgDataDirectoryLinux, "--wait", "--mode", "fast", "stop"]);
+          }
+        } finally {
+          try {
+            if (pgDataDirectoryCreated && process.platform === "win32"
+              && /^\/tmp\/cangkuguanli-restore-[A-Za-z0-9]+$/.test(pgDataDirectoryLinux ?? "")) {
+              spawnSync("wsl.exe", ["--distribution", "Ubuntu", "--exec", "rm", "-rf", "--", pgDataDirectoryLinux], { encoding: "utf8" });
+            }
+          } finally {
+            if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true });
+          }
+        }
+      }
+    }
   }
-  if (pgDataDirectoryCreated && process.platform === "win32"
-    && /^\/tmp\/cangkuguanli-restore-[A-Za-z0-9]+$/.test(pgDataDirectoryLinux ?? "")) {
-    spawnSync("wsl.exe", ["--distribution", "Ubuntu", "--exec", "rm", "-rf", "--", pgDataDirectoryLinux], { encoding: "utf8" });
-  }
-  if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true });
 });
 
 test("a PostgreSQL backup restores usable warehouse systems and survives database restart", async () => {
