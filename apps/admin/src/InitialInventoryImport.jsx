@@ -33,7 +33,7 @@ function CatalogCandidates({ row, catalog, loading, error }) {
         <li key={`${candidate.id}-${candidate.locationId}`}>
           <strong>
             {result.candidates.length > 1 ? `候选 ${index + 1} · ` : ""}
-            {candidate.name} · {candidate.spec} · 每件 {candidate.perCase} 个
+            {candidate.name || "（名称空白）"} · {candidate.spec || "（规格空白）"} · {candidate.material || "（材质空白）"} · {candidate.color || "（颜色空白）"} · 每件 {candidate.perCase} 个
           </strong>
           <span>{candidate.warehouse} · {candidate.spot}</span>
           <span>商品类别：{candidate.category || "（空白）"} · 类别名称：{candidate.categoryName || "（空白）"} · 备注：{candidate.note || "（空白）"}</span>
@@ -50,6 +50,9 @@ export default function InitialInventoryImport() {
   const [selectedSheetName, setSelectedSheetName] = useState("");
   const [error, setError] = useState("");
   const [reading, setReading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitMessage, setSubmitMessage] = useState("");
   const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
@@ -78,12 +81,15 @@ export default function InitialInventoryImport() {
 
   async function handleFileChange(event) {
     const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
     if (!file) return;
 
     setFileName(file.name);
     setParsed(null);
     setSelectedSheetName("");
     setError("");
+    setSubmitError("");
+    setSubmitMessage("");
     setReading(true);
 
     try {
@@ -97,14 +103,69 @@ export default function InitialInventoryImport() {
     }
   }
 
+  function importRow(row) {
+    const value = (field) => row.cells.find((cell) => cell.field === field)?.rawValue;
+    const text = (field) => {
+      const rawValue = value(field);
+      return rawValue === undefined || rawValue === null ? "" : String(rawValue);
+    };
+
+    return {
+      productName: text("productName"),
+      spec: text("spec"),
+      material: text("material"),
+      color: text("color"),
+      perCase: Number(value("perCase")),
+      category: value("category") === undefined || value("category") === null ? null : String(value("category")),
+      categoryName: value("categoryName") === undefined || value("categoryName") === null ? null : String(value("categoryName")),
+      note: value("note") === undefined || value("note") === null ? null : String(value("note")),
+      warehouse: text("warehouse"),
+      spot: text("spot"),
+      cases: Number(value("cases")),
+      loose: Number(value("loose")),
+    };
+  }
+
+  async function handleSubmit() {
+    if (!selectedSheet || selectedSheet.rows.length === 0
+      || selectedSheet.issues.length > 0
+      || selectedSheet.rows.some((row) => row.issues.length > 0)
+      || submitting) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+    setSubmitMessage("");
+    try {
+      const response = await fetch("/api/admin/initial-inventory/imports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: selectedSheet.rows.map(importRow) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `整批提交失败（HTTP ${response.status}）。`);
+      setSubmitMessage(`整批导入成功：核对 ${result.receivedRows} 行，登记 ${result.importedRows} 条库存记录。`);
+      await loadCatalog();
+    } catch (submitFailure) {
+      setSubmitError(submitFailure.message || "整批提交失败，库存未登记。请检查网络后重试。");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const canSubmit = Boolean(selectedSheet
+    && selectedSheet.rows.length > 0
+    && selectedSheet.issues.length === 0
+    && selectedSheet.rows.every((row) => row.issues.length === 0)
+    && !submitting);
+
   return (
     <section className="initial-import" aria-labelledby="initial-import-title">
       <div className="initial-import-heading">
         <div>
-          <p className="eyebrow">管理员专属 · 只读预览</p>
+          <p className="eyebrow">管理员专属 · 核对后整批提交</p>
           <h2 id="initial-import-title">初始库存文件预览</h2>
           <p className="initial-import-description">
-            解析来源文件并保留原始单元格内容，只读显示五项信息完全一致的产品与货位候选；不会自动选择、写入或换算库存。
+            保留来源文件原值并按产品身份、每件个数和货位核对。问题行须修正原文件后重新上传；仍有问题时整批不能提交。
           </p>
         </div>
         <label className={`button button-dark initial-import-file-button${reading ? " initial-import-file-button-pending" : ""}`}>
@@ -125,6 +186,8 @@ export default function InitialInventoryImport() {
       </div>
 
       {error && <p className="initial-import-error" role="alert">{error}</p>}
+      {submitError && <p className="initial-import-error" role="alert">{submitError}</p>}
+      {submitMessage && <p className="initial-import-success" role="status">{submitMessage}</p>}
       {catalogLoading && <p className="initial-import-catalog-state" role="status">正在读取已保存的产品规格与货位资料…</p>}
       {catalogError && (
         <div className="initial-import-error initial-import-catalog-error" role="alert">
@@ -200,8 +263,14 @@ export default function InitialInventoryImport() {
             </table>
           </div>
           <p className="initial-import-note">
-            空白保持为空白；“数量”列的单位尚未确认，仅显示原值。产品规格、仓库和货位的关联规则仍待确认，预览不会自动选择或保存候选资料。
+            空白身份字段按空值匹配；同一产品身份、每件个数、仓库和货位的重复行会合并数量。已有库存会累加，管理员可持续分批导入。
           </p>
+          <div className="initial-import-submit-row">
+            <span>若有任何问题，请修正原文件并重新上传；本批次不会部分登记。</span>
+            <button className="button button-dark" type="button" onClick={() => void handleSubmit()} disabled={!canSubmit}>
+              {submitting ? "正在整批提交…" : "确认导入初始库存"}
+            </button>
+          </div>
         </>
       )}
     </section>

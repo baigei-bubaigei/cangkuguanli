@@ -6,6 +6,8 @@ XLSX.set_cptable(codepage);
 const fieldAliases = [
   ["spot", ["货位"]],
   ["productName", ["商品名称", "产品名称"]],
+  ["material", ["材质"]],
+  ["color", ["颜色"]],
   ["category", ["商品类别"]],
   ["categoryName", ["类别名称"]],
   ["note", ["备注"]],
@@ -17,8 +19,6 @@ const fieldAliases = [
 ];
 
 const requiredFields = [
-  ["productName", "商品名称"],
-  ["spec", "规格"],
   ["perCase", "每件个数"],
   ["warehouse", "仓库"],
   ["spot", "货位"],
@@ -42,6 +42,10 @@ function valueAt(sheet, rowIndex, columnIndex) {
 
 function isBlank(value) {
   return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+}
+
+function identityValue(value) {
+  return isBlank(value) ? "" : String(value).trim();
 }
 
 function headerColumns(sheet, headerRowIndex, startColumn, endColumn) {
@@ -111,6 +115,16 @@ function rowIssues(cells) {
     if (cell && !isBlank(cell.rawValue) && !isNonnegativeInteger(cell.rawValue)) {
       issues.push(`${label}必须为非负整数`);
     }
+  }
+
+  const cases = cellFor("cases");
+  const loose = cellFor("loose");
+  if (cases && loose
+    && isNonnegativeInteger(cases.rawValue)
+    && isNonnegativeInteger(loose.rawValue)
+    && Number(cases.rawValue) === 0
+    && Number(loose.rawValue) === 0) {
+    issues.push("整件数和散个数至少一项大于0");
   }
 
   const quantity = cells.find((cell) => cell.header.trim() === "数量");
@@ -195,6 +209,8 @@ export function findExactCatalogCandidates(row, products) {
   const labels = {
     productName: "商品名称",
     spec: "规格",
+    material: "材质",
+    color: "颜色",
     perCase: "每件个数",
     warehouse: "仓库",
     spot: "货位",
@@ -203,7 +219,7 @@ export function findExactCatalogCandidates(row, products) {
     Object.keys(labels).map((field) => [field, row.cells.find((cell) => cell.field === field)?.rawValue]),
   );
   const missing = Object.entries(labels)
-    .filter(([field]) => isBlank(raw[field]))
+    .filter(([field]) => !["productName", "spec", "material", "color"].includes(field) && isBlank(raw[field]))
     .map(([, label]) => label);
   if (missing.length) {
     return { candidates: [], issue: `缺少${missing.join("、")}，无法精确查找已保存资料。` };
@@ -215,11 +231,13 @@ export function findExactCatalogCandidates(row, products) {
   }
 
   const candidates = products.filter((product) => (
-    product.name === raw.productName
-    && product.spec === raw.spec
+    identityValue(product.name) === identityValue(raw.productName)
+    && identityValue(product.spec) === identityValue(raw.spec)
+    && identityValue(product.material) === identityValue(raw.material)
+    && identityValue(product.color) === identityValue(raw.color)
     && product.perCase === perCase
-    && product.warehouse === raw.warehouse
-    && product.spot === raw.spot
+    && identityValue(product.warehouse) === identityValue(raw.warehouse)
+    && identityValue(product.spot) === identityValue(raw.spot)
   ));
 
   return {
