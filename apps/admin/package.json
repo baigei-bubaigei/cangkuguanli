@@ -11,6 +11,7 @@
   "dependencies": {
     "@cangkuguanli/inventory-query": "0.1.0",
     "@cangkuguanli/product-catalog": "0.1.0",
+    "@cangkuguanli/system-operation-logs": "0.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

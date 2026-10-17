@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ProductCatalog from "@cangkuguanli/product-catalog";
 import InventoryQuery from "@cangkuguanli/inventory-query";
 import BusinessHistory from "@cangkuguanli/inventory-query/history";
+import SystemOperationLogs from "@cangkuguanli/system-operation-logs";
 
 const employeePages = [
   { label: "库存查询", group: "库存工作区" },
@@ -320,6 +321,8 @@ export default function App() {
             <BusinessHistory sourceSystem="employee" />
           ) : activePage === "产品与货位" ? (
             <ProductCatalog />
+          ) : activePage === "系统操作日志" ? (
+            <SystemOperationLogs system="employee" />
           ) : (
             <section className="page-placeholder" aria-live="polite">
               <span className="system-badge">员工系统</span>

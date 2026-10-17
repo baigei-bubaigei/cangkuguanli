@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import ProductCatalog from "@cangkuguanli/product-catalog";
 import InventoryQuery from "@cangkuguanli/inventory-query";
 import BusinessHistory from "@cangkuguanli/inventory-query/history";
+import SystemOperationLogs from "@cangkuguanli/system-operation-logs";
 import EmployeeAccounts from "./EmployeeAccounts.jsx";
 
 const InitialInventoryImport = lazy(() => import("./InitialInventoryImport.jsx"));
@@ -258,6 +259,8 @@ export default function App() {
             )}>
               <InitialInventoryImport />
             </Suspense>
+          ) : activePage === "系统操作日志" ? (
+            <SystemOperationLogs system="admin" />
           ) : (
             <section className="page-placeholder" aria-live="polite">
               <span className="system-badge">管理员系统</span>
