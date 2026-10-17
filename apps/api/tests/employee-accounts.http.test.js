@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,9 @@ const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl) {
   throw new Error("TEST_DATABASE_URL must point to a dedicated PostgreSQL test database.");
 }
+const testSchema = `issue30_employee_accounts_${process.pid}_${randomBytes(6).toString("hex")}`;
+const isolatedDatabaseUrl = new URL(testDatabaseUrl);
+isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${testSchema}`);
 
 const apiDirectory = fileURLToPath(new URL("..", import.meta.url));
 const nextCli = fileURLToPath(new URL("../../../node_modules/next/dist/bin/next", import.meta.url));
@@ -23,6 +27,7 @@ let serverProcess;
 let baseUrl;
 let adminAccount;
 let existingEmployeeAccount;
+let schemaCreated = false;
 
 async function availablePort() {
   const server = createServer();
@@ -66,6 +71,43 @@ async function login(system, account, password) {
   });
 }
 
+async function assertIsolatedConnection(client) {
+  const result = await client.query(
+    `SELECT current_schema() AS schema,
+            current_schemas(false) @> ARRAY[$1]::name[] AS contains_schema,
+            cardinality(current_schemas(false)) AS schema_count,
+            'public' = ANY(current_schemas(false)) AS contains_public`,
+    [testSchema],
+  );
+  assert.equal(result.rows[0].schema, testSchema);
+  assert.equal(result.rows[0].contains_schema, true);
+  assert.equal(result.rows[0].schema_count, 1);
+  assert.equal(result.rows[0].contains_public, false);
+}
+
+async function queryDatabase(sql, values = []) {
+  const client = await pool.connect();
+  try {
+    await assertIsolatedConnection(client);
+    return await client.query(sql, values);
+  } finally {
+    client.release();
+  }
+}
+
+async function logsForEmployee(employeeId) {
+  return queryDatabase(
+    `SELECT source_system, operation_type, target_type, target_id::text AS target_id,
+            actor_admin_account_id::text AS actor_admin_account_id,
+            actor_employee_account_id::text AS actor_employee_account_id,
+            actor_account_snapshot, actor_display_name_snapshot, operation_content, recorded_at
+       FROM system_operation_logs
+      WHERE target_type = 'employee_account' AND target_id = $1
+      ORDER BY id`,
+    [employeeId],
+  );
+}
+
 function cookieFrom(response, name) {
   const setCookie = response.headers.getSetCookie().find((value) => value.startsWith(`${name}=`));
   assert.ok(setCookie, `login response should set ${name}`);
@@ -74,28 +116,50 @@ function cookieFrom(response, name) {
 }
 
 before(async () => {
+  const bootstrapDatabaseUrl = new URL(testDatabaseUrl);
+  bootstrapDatabaseUrl.searchParams.set("options", `-c search_path=${testSchema},pg_catalog`);
+  const bootstrapPool = new Pool({ connectionString: bootstrapDatabaseUrl.toString() });
+  const bootstrapClient = await bootstrapPool.connect();
+  try {
+    const bootstrapGuard = await bootstrapClient.query(
+      "SELECT 'public' = ANY(current_schemas(false)) AS contains_public",
+    );
+    assert.equal(bootstrapGuard.rows[0].contains_public, false);
+    await bootstrapClient.query(`CREATE SCHEMA "${testSchema}"`);
+    schemaCreated = true;
+  } finally {
+    bootstrapClient.release();
+    await bootstrapPool.end();
+  }
+
   const migrations = spawnSync(process.execPath, [migrationCli], {
     cwd: apiDirectory,
-    env: { ...process.env, DATABASE_URL: testDatabaseUrl },
+    env: { ...process.env, DATABASE_URL: isolatedDatabaseUrl.toString() },
     encoding: "utf8",
   });
   if (migrations.status !== 0) {
     throw new Error(`PostgreSQL migrations failed: ${migrations.stderr || migrations.stdout}`);
   }
 
-  pool = new Pool({ connectionString: testDatabaseUrl });
+  pool = new Pool({ connectionString: isolatedDatabaseUrl.toString() });
+  const guardClient = await pool.connect();
+  try {
+    await assertIsolatedConnection(guardClient);
+  } finally {
+    guardClient.release();
+  }
   adminAccount = `${accountPrefix}-admin`;
   existingEmployeeAccount = `${accountPrefix}-employee`;
   const [adminHash, employeeHash] = await Promise.all([
     hashPassword(adminPassword),
     hashPassword(employeePassword),
   ]);
-  await pool.query(
+  await queryDatabase(
     `INSERT INTO admin_accounts (account, display_name, password_hash)
      VALUES ($1, $2, $3)`,
     [adminAccount, "账号管理测试管理员", adminHash],
   );
-  await pool.query(
+  await queryDatabase(
     `INSERT INTO employee_accounts (account, display_name, password_hash)
      VALUES ($1, $2, $3)`,
     [existingEmployeeAccount, "已存在员工", employeeHash],
@@ -108,7 +172,7 @@ before(async () => {
     [nextCli, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
     {
       cwd: apiDirectory,
-      env: { ...process.env, DATABASE_URL: testDatabaseUrl },
+      env: { ...process.env, DATABASE_URL: isolatedDatabaseUrl.toString() },
       stdio: "ignore",
       windowsHide: true,
     },
@@ -119,9 +183,24 @@ before(async () => {
 after(async () => {
   if (serverProcess && serverProcess.exitCode === null) serverProcess.kill();
   if (pool) {
-    await pool.query("DELETE FROM admin_accounts WHERE account = $1", [adminAccount]);
-    await pool.query("DELETE FROM employee_accounts WHERE account LIKE $1", [`${accountPrefix}%`]);
+    const operationLogTable = await queryDatabase("SELECT to_regclass('system_operation_logs') AS table_name");
+    if (operationLogTable.rows[0].table_name) {
+      await queryDatabase("DELETE FROM system_operation_logs WHERE actor_account_snapshot LIKE $1", [`${accountPrefix}%`]);
+    }
+    await queryDatabase("DELETE FROM admin_accounts WHERE account = $1", [adminAccount]);
+    await queryDatabase("DELETE FROM employee_accounts WHERE account LIKE $1", [`${accountPrefix}%`]);
     await pool.end();
+  }
+  if (schemaCreated) {
+    const cleanupPool = new Pool({ connectionString: isolatedDatabaseUrl.toString() });
+    const client = await cleanupPool.connect();
+    try {
+      await assertIsolatedConnection(client);
+      await client.query(`DROP SCHEMA "${testSchema}" CASCADE`);
+    } finally {
+      client.release();
+      await cleanupPool.end();
+    }
   }
 });
 
@@ -207,6 +286,38 @@ test("only administrators can create and list persisted employee accounts", asyn
   assert.equal(listed.status, "active");
   assert.equal(Object.hasOwn(listed, "passwordHash"), false);
   assert.equal(Object.hasOwn(listed, "temporaryPassword"), false);
+  const employeeLogs = await logsForEmployee(created.employee.id);
+  const adminIdentity = await queryDatabase(
+    "SELECT id::text AS id FROM admin_accounts WHERE account = $1",
+    [adminAccount],
+  );
+  assert.equal(employeeLogs.rowCount, 1);
+  assert.deepEqual({
+    sourceSystem: employeeLogs.rows[0].source_system,
+    operationType: employeeLogs.rows[0].operation_type,
+    adminActorId: employeeLogs.rows[0].actor_admin_account_id,
+    employeeActorId: employeeLogs.rows[0].actor_employee_account_id,
+    actorAccount: employeeLogs.rows[0].actor_account_snapshot,
+    actorDisplayName: employeeLogs.rows[0].actor_display_name_snapshot,
+    targetType: employeeLogs.rows[0].target_type,
+    targetId: employeeLogs.rows[0].target_id,
+    content: employeeLogs.rows[0].operation_content,
+  }, {
+    sourceSystem: "admin",
+    operationType: "employee_account_created",
+    adminActorId: adminIdentity.rows[0].id,
+    employeeActorId: null,
+    actorAccount: adminAccount,
+    actorDisplayName: "账号管理测试管理员",
+    targetType: "employee_account",
+    targetId: created.employee.id,
+    content: {
+      account: createdAccount,
+      displayName: "新建员工",
+      status: "active",
+    },
+  });
+  assert.ok(employeeLogs.rows[0].recorded_at instanceof Date);
 
   const duplicateCreated = await request("/api/admin/employees", {
     method: "POST",
@@ -293,6 +404,7 @@ test("administrators can enable and disable employee accounts, including existin
   const employee = (await initialList.json()).find((item) => item.account === existingEmployeeAccount);
   assert.ok(employee, "the employee should be available from the administrator list");
   assert.equal(employee.status, "active");
+  assert.equal((await logsForEmployee(employee.id)).rowCount, 0);
 
   const togglePath = `/api/admin/employees/${employee.id}`;
   const employeeToggle = await request(togglePath, {
@@ -323,6 +435,37 @@ test("administrators can enable and disable employee accounts, including existin
   });
   assert.equal(unknownEmployee.status, 404);
 
+  await queryDatabase(`
+    CREATE FUNCTION issue30_reject_employee_status_log() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.operation_type = 'employee_account_status_changed' THEN
+        RAISE EXCEPTION 'simulated operation log write failure';
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+  `);
+  await queryDatabase(`
+    CREATE TRIGGER issue30_reject_employee_status_log
+    BEFORE INSERT ON system_operation_logs
+    FOR EACH ROW EXECUTE FUNCTION issue30_reject_employee_status_log()
+  `);
+  const failedDisable = await request(togglePath, {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "disabled" }),
+  });
+  assert.equal(failedDisable.status, 500);
+  const statusAfterFailedLog = await queryDatabase(
+    "SELECT status FROM employee_accounts WHERE id = $1",
+    [employee.id],
+  );
+  assert.equal(statusAfterFailedLog.rows[0].status, "active");
+  assert.equal((await logsForEmployee(employee.id)).rowCount, 0);
+  await queryDatabase("DROP TRIGGER issue30_reject_employee_status_log ON system_operation_logs");
+  await queryDatabase("DROP FUNCTION issue30_reject_employee_status_log()");
+
   const disabledResponse = await request(togglePath, {
     method: "PATCH",
     headers: { Cookie: adminCookie, "Content-Type": "application/json" },
@@ -330,6 +473,35 @@ test("administrators can enable and disable employee accounts, including existin
   });
   assert.equal(disabledResponse.status, 200);
   assert.equal((await disabledResponse.json()).status, "disabled");
+  const disabledLogs = await logsForEmployee(employee.id);
+  const adminIdentity = await queryDatabase(
+    "SELECT id::text AS id FROM admin_accounts WHERE account = $1",
+    [adminAccount],
+  );
+  assert.equal(disabledLogs.rowCount, 1);
+  assert.deepEqual({
+    sourceSystem: disabledLogs.rows[0].source_system,
+    operationType: disabledLogs.rows[0].operation_type,
+    adminActorId: disabledLogs.rows[0].actor_admin_account_id,
+    employeeActorId: disabledLogs.rows[0].actor_employee_account_id,
+    actorAccount: disabledLogs.rows[0].actor_account_snapshot,
+    actorDisplayName: disabledLogs.rows[0].actor_display_name_snapshot,
+    content: disabledLogs.rows[0].operation_content,
+  }, {
+    sourceSystem: "admin",
+    operationType: "employee_account_status_changed",
+    adminActorId: adminIdentity.rows[0].id,
+    employeeActorId: null,
+    actorAccount: adminAccount,
+    actorDisplayName: "账号管理测试管理员",
+    content: {
+      account: existingEmployeeAccount,
+      displayName: "已存在员工",
+      beforeStatus: "active",
+      afterStatus: "disabled",
+    },
+  });
+  assert.ok(disabledLogs.rows[0].recorded_at instanceof Date);
 
   const refreshedList = await request("/api/admin/employees", {
     headers: { Cookie: adminCookie },
@@ -365,6 +537,15 @@ test("administrators can enable and disable employee accounts, including existin
   });
   assert.equal(enabledResponse.status, 200);
   assert.equal((await enabledResponse.json()).status, "active");
+  const statusLogs = await logsForEmployee(employee.id);
+  assert.equal(statusLogs.rowCount, 2);
+  assert.deepEqual(statusLogs.rows.map(({ operation_content: content }) => ({
+    beforeStatus: content.beforeStatus,
+    afterStatus: content.afterStatus,
+  })), [
+    { beforeStatus: "active", afterStatus: "disabled" },
+    { beforeStatus: "disabled", afterStatus: "active" },
+  ]);
 
   const enabledLogin = await login("employee", existingEmployeeAccount, employeePassword);
   assert.equal(enabledLogin.status, 200);

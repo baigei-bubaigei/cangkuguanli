@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { hasCatalogSession } from "../../../../src/auth/catalog-auth.js";
+import { currentCatalogActor, hasCatalogSession } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
+import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  if (!await hasCatalogSession(request)) return unauthorized();
+  const actor = await currentCatalogActor(request);
+  if (!actor) return unauthorized();
 
   let body;
   try {
@@ -114,6 +116,22 @@ export async function POST(request) {
       `${productSelect} WHERE p.id = $1 ORDER BY l.id`,
       [productResult.rows[0].id],
     );
+    await writeOperationLog(client, {
+      actor,
+      operationType: "product_spec_created",
+      targetType: "product_spec",
+      targetId: productResult.rows[0].id,
+      content: {
+        productName: name,
+        spec,
+        category,
+        categoryName,
+        perCaseCount: perCase,
+        note,
+        warehouse,
+        spot,
+      },
+    });
     await client.query("COMMIT");
     return NextResponse.json(productFields(result.rows[0]), {
       status: 201,

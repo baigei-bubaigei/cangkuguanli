@@ -6,6 +6,7 @@ import {
 } from "../../../../src/auth/admin-auth.js";
 import { hashPassword } from "../../../../src/auth/password.js";
 import { database } from "../../../../src/db.js";
+import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  if (!await administrator(request)) return unauthorized();
+  const actor = await administrator(request);
+  if (!actor) return unauthorized();
 
   let body;
   try {
@@ -87,6 +89,17 @@ export async function POST(request) {
        RETURNING id, account, display_name, status, created_at`,
       [account, displayName, passwordHash],
     );
+    await writeOperationLog(client, {
+      actor: { ...actor, sourceSystem: "admin" },
+      operationType: "employee_account_created",
+      targetType: "employee_account",
+      targetId: inserted.rows[0].id,
+      content: {
+        account: inserted.rows[0].account,
+        displayName: inserted.rows[0].display_name,
+        status: inserted.rows[0].status,
+      },
+    });
     await client.query("COMMIT");
 
     return NextResponse.json({

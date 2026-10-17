@@ -4,6 +4,7 @@ import {
   currentAdmin,
 } from "../../../../../src/auth/admin-auth.js";
 import { database } from "../../../../../src/db.js";
+import { writeOperationLog } from "../../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,8 @@ function invalidRequest() {
 }
 
 export async function PATCH(request, { params }) {
-  if (!await administrator(request)) return unauthorized();
+  const actor = await administrator(request);
+  if (!actor) return unauthorized();
 
   const { employeeId } = await params;
   if (!/^\d+$/.test(employeeId)) return invalidRequest();
@@ -43,24 +45,57 @@ export async function PATCH(request, { params }) {
     return invalidRequest();
   }
 
-  const result = await database().query(
-    `UPDATE employee_accounts
-        SET status = $1
-      WHERE id = $2
-      RETURNING id, status`,
-    [body.status, employeeId],
-  );
-  if (!result.rowCount) {
-    return NextResponse.json({ error: "找不到该员工账号。" }, {
-      status: 404,
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    const existing = await client.query(
+      `SELECT id, account, display_name, status
+         FROM employee_accounts
+        WHERE id = $1
+        FOR UPDATE`,
+      [employeeId],
+    );
+    if (!existing.rowCount) {
+      await client.query("ROLLBACK");
+      return NextResponse.json({ error: "找不到该员工账号。" }, {
+        status: 404,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
+    const employee = existing.rows[0];
+    if (employee.status !== body.status) {
+      await client.query(
+        `UPDATE employee_accounts
+            SET status = $1
+          WHERE id = $2`,
+        [body.status, employeeId],
+      );
+      await writeOperationLog(client, {
+        actor: { ...actor, sourceSystem: "admin" },
+        operationType: "employee_account_status_changed",
+        targetType: "employee_account",
+        targetId: employee.id,
+        content: {
+          account: employee.account,
+          displayName: employee.display_name,
+          beforeStatus: employee.status,
+          afterStatus: body.status,
+        },
+      });
+    }
+
+    await client.query("COMMIT");
+    return NextResponse.json({
+      id: String(employee.id),
+      status: body.status,
+    }, {
       headers: { "Cache-Control": "no-store" },
     });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return NextResponse.json({
-    id: String(result.rows[0].id),
-    status: result.rows[0].status,
-  }, {
-    headers: { "Cache-Control": "no-store" },
-  });
 }
