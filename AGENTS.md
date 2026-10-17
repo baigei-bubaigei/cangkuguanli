@@ -18,6 +18,10 @@
 需求与开发任务使用 GitHub Issues，仓库为 baigei-bubaigei/cangkuguanli。
 操作规则见 `docs/agents/issue-tracker.md`。
 
+### Triage labels
+
+工单分类使用 `docs/agents/triage-labels.md` 中映射的状态标签。
+
 ### Domain docs
 
 使用单一上下文：根目录 `GLOSSARY.md` 和 `docs/adr/`。
