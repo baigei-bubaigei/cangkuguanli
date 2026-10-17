@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
@@ -105,6 +106,7 @@ function requestInbound(transaction, cookie) {
     headers: {
       ...(cookie ? { Cookie: cookie } : {}),
       "Content-Type": "application/json",
+      "Idempotency-Key": randomBytes(16).toString("hex"),
     },
     body: JSON.stringify(transaction),
   });
@@ -116,6 +118,7 @@ function requestOutbound(transaction, cookie) {
     headers: {
       ...(cookie ? { Cookie: cookie } : {}),
       "Content-Type": "application/json",
+      "Idempotency-Key": randomBytes(16).toString("hex"),
     },
     body: JSON.stringify(transaction),
   });
@@ -127,6 +130,7 @@ function requestSplit(transaction, cookie) {
     headers: {
       ...(cookie ? { Cookie: cookie } : {}),
       "Content-Type": "application/json",
+      "Idempotency-Key": randomBytes(16).toString("hex"),
     },
     body: JSON.stringify(transaction),
   });
@@ -138,6 +142,7 @@ function requestMove(transaction, cookie) {
     headers: {
       ...(cookie ? { Cookie: cookie } : {}),
       "Content-Type": "application/json",
+      "Idempotency-Key": randomBytes(16).toString("hex"),
     },
     body: JSON.stringify(transaction),
   });

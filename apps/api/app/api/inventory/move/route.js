@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { currentCatalogActor } from "../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../src/db.js";
+import {
+  claimIdempotency,
+  completeIdempotency,
+  idempotencyResponse,
+  missingIdempotencyKeyResponse,
+  requestIdempotencyKey,
+} from "../../../../src/idempotency.js";
 import { writeOperationLog } from "../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
@@ -34,32 +41,57 @@ export async function POST(request) {
       headers: { "Cache-Control": "no-store" },
     });
   }
+  const idempotencyKey = requestIdempotencyKey(request);
+  if (!idempotencyKey) return missingIdempotencyKeyResponse();
 
   let body;
+  let payload;
   try {
-    body = await request.json();
+    const rawBody = await request.text();
+    try {
+      body = JSON.parse(rawBody);
+      payload = body;
+    } catch {
+      payload = { unparsedJson: rawBody };
+    }
   } catch {
-    return invalidRequest();
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body)) return invalidRequest();
-
-  const productSpecId = requiredId(body.productSpecId);
-  const sourceLocationId = requiredId(body.sourceLocationId);
-  const targetLocationId = requiredId(body.targetLocationId);
-  const actualOccurredAt = occurredAt(body.actualOccurredAt);
-  const note = body.note === undefined ? "" : body.note;
-  if (!productSpecId || !sourceLocationId || !targetLocationId
-    || sourceLocationId === targetLocationId
-    || !quantity(body.cases) || !quantity(body.loose)
-    || (body.cases === 0 && body.loose === 0)
-    || typeof note !== "string"
-    || !actualOccurredAt) {
     return invalidRequest();
   }
 
   const client = await database().connect();
   try {
     await client.query("BEGIN");
+    const claim = await claimIdempotency(client, {
+      actor,
+      scope: "inventory/move",
+      key: idempotencyKey,
+      payload,
+    });
+    const priorResponse = idempotencyResponse(claim);
+    if (priorResponse) {
+      await client.query("ROLLBACK");
+      return priorResponse;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      await client.query("ROLLBACK");
+      return invalidRequest();
+    }
+
+    const productSpecId = requiredId(body.productSpecId);
+    const sourceLocationId = requiredId(body.sourceLocationId);
+    const targetLocationId = requiredId(body.targetLocationId);
+    const actualOccurredAt = occurredAt(body.actualOccurredAt);
+    const note = body.note === undefined ? "" : body.note;
+    if (!productSpecId || !sourceLocationId || !targetLocationId
+      || sourceLocationId === targetLocationId
+      || !quantity(body.cases) || !quantity(body.loose)
+      || (body.cases === 0 && body.loose === 0)
+      || typeof note !== "string"
+      || !actualOccurredAt) {
+      await client.query("ROLLBACK");
+      return invalidRequest();
+    }
+
     const locationsResult = await client.query(
       `SELECT location_id, case_count, loose_count
          FROM product_spec_locations
@@ -138,11 +170,9 @@ export async function POST(request) {
         actualOccurredAt: transaction.actual_occurred_at.toISOString(),
       },
     });
-    await client.query("COMMIT");
-
     const sourceInventory = sourceInventoryResult.rows[0];
     const targetInventory = targetInventoryResult.rows[0];
-    return NextResponse.json({
+    const responseBody = {
       transactionId: String(transaction.id),
       operationType: "move",
       productSpecId,
@@ -159,7 +189,11 @@ export async function POST(request) {
       sourceLoose: sourceInventory.loose_count,
       targetCases: targetInventory.case_count,
       targetLoose: targetInventory.loose_count,
-    }, {
+    };
+    await completeIdempotency(client, claim.id, 201, responseBody);
+    await client.query("COMMIT");
+
+    return NextResponse.json(responseBody, {
       status: 201,
       headers: { "Cache-Control": "no-store" },
     });

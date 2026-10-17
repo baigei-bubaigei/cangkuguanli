@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { completeInventoryMutation, inventoryMutationOptions } from "@cangkuguanli/inventory-query/submission";
 import { findExactCatalogCandidates, parseInventoryFile } from "./parseInventoryImport.js";
 import "./initial-inventory-import.css";
 
@@ -56,6 +57,7 @@ export default function InitialInventoryImport() {
   const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
+  const submissionRef = useRef(null);
   const selectedSheet = parsed?.sheets.find((sheet) => sheet.name === selectedSheetName);
 
   async function loadCatalog() {
@@ -136,13 +138,15 @@ export default function InitialInventoryImport() {
     setSubmitError("");
     setSubmitMessage("");
     try {
-      const response = await fetch("/api/admin/initial-inventory/imports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: selectedSheet.rows.map(importRow) }),
-      });
+      const payload = { rows: selectedSheet.rows.map(importRow) };
+      const response = await fetch("/api/admin/initial-inventory/imports", inventoryMutationOptions(
+        submissionRef,
+        "/api/admin/initial-inventory/imports",
+        payload,
+      ));
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || `整批提交失败（HTTP ${response.status}）。`);
+      completeInventoryMutation(submissionRef);
       setSubmitMessage(`整批导入成功：核对 ${result.receivedRows} 行，登记 ${result.importedRows} 条库存记录。`);
       await loadCatalog();
     } catch (submitFailure) {

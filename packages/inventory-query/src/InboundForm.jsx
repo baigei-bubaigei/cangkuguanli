@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
 
 function localDateTimeNow() {
   const now = new Date();
@@ -18,6 +19,7 @@ export default function InboundForm({ products, initialProductId, initialLocatio
   const [actualOccurredAt, setActualOccurredAt] = useState(localDateTimeNow);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const submissionRef = useRef(null);
   const selectedProduct = products.find((product) => product.id === productSpecId);
 
   function handleProductChange(event) {
@@ -42,23 +44,25 @@ export default function InboundForm({ products, initialProductId, initialLocatio
 
     setPending(true);
     try {
-      const response = await fetch("/api/inventory/inbound", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productSpecId,
-          locationId,
-          cases: caseCount,
-          loose: looseCount,
-          actualOccurredAt: new Date(actualOccurredAt).toISOString(),
-        }),
-      });
+      const payload = {
+        productSpecId,
+        locationId,
+        cases: caseCount,
+        loose: looseCount,
+        actualOccurredAt: new Date(actualOccurredAt).toISOString(),
+      };
+      const response = await fetch("/api/inventory/inbound", inventoryMutationOptions(
+        submissionRef,
+        "/api/inventory/inbound",
+        payload,
+      ));
       const result = await response.json();
       if (!response.ok) {
         setError(result.error || "入库未完成，请检查资料后重试。");
         return;
       }
 
+      completeInventoryMutation(submissionRef);
       await onSaved();
     } catch {
       setError("入库未完成，当前输入已保留，请检查网络后重试。");

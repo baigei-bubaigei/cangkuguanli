@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { currentCatalogActor } from "../../../../../src/auth/catalog-auth.js";
 import { database } from "../../../../../src/db.js";
+import {
+  claimIdempotency,
+  completeIdempotency,
+  idempotencyResponse,
+  missingIdempotencyKeyResponse,
+  requestIdempotencyKey,
+} from "../../../../../src/idempotency.js";
 import { writeOperationLog } from "../../../../../src/operation-logs.js";
 
 export const runtime = "nodejs";
@@ -194,19 +201,49 @@ export async function POST(request) {
   if (actor.sourceSystem !== "admin") {
     return NextResponse.json({ error: "只有管理员可以导入初始库存。" }, { status: 403 });
   }
+  const idempotencyKey = requestIdempotencyKey(request);
+  if (!idempotencyKey) return missingIdempotencyKeyResponse();
+
+  let body;
+  let payload;
+  try {
+    const rawBody = await request.text();
+    try {
+      body = JSON.parse(rawBody);
+      payload = body;
+    } catch {
+      payload = { unparsedJson: rawBody };
+    }
+  } catch {
+    return invalidRequest("请检查初始库存文件内容后重新上传。", null);
+  }
 
   const client = await database().connect();
   let batchId;
   let receivedRows = null;
   let transactionOpen = false;
   try {
+    await client.query("BEGIN");
+    transactionOpen = true;
+    const claim = await claimIdempotency(client, {
+      actor,
+      scope: "admin/initial-inventory/imports",
+      key: idempotencyKey,
+      payload,
+    });
+    const priorResponse = idempotencyResponse(claim);
+    if (priorResponse) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
+      return priorResponse;
+    }
+
     const batchResult = await client.query("SELECT nextval('initial_inventory_import_batch_id_seq')::TEXT AS id");
     batchId = batchResult.rows[0].id;
 
-    let body;
-    try {
-      body = await request.json();
-    } catch {
+    if (body === undefined) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
       return await failedImportResponse(
         client,
         actor,
@@ -216,6 +253,8 @@ export async function POST(request) {
       );
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
       return await failedImportResponse(
         client,
         actor,
@@ -228,14 +267,16 @@ export async function POST(request) {
     receivedRows = Array.isArray(body.rows) ? body.rows.length : null;
     const prepared = prepareRows(body.rows);
     if (!prepared) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
       return await failedImportResponse(client, actor, batchId, receivedRows, "文件没有可提交的库存行。");
     }
     if (prepared.error) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
       return await failedImportResponse(client, actor, batchId, receivedRows, prepared.error);
     }
 
-    await client.query("BEGIN");
-    transactionOpen = true;
     const actualOccurredAt = new Date();
     for (const row of prepared.groups) {
       const specId = await productSpecId(client, row);
@@ -309,13 +350,15 @@ export async function POST(request) {
         importedRows: prepared.groups.length,
       },
     });
-    await client.query("COMMIT");
-    transactionOpen = false;
-    return NextResponse.json({
+    const responseBody = {
       batchId,
       receivedRows,
       importedRows: prepared.groups.length,
-    }, { status: 201, headers: { "Cache-Control": "no-store" } });
+    };
+    await completeIdempotency(client, claim.id, 201, responseBody);
+    await client.query("COMMIT");
+    transactionOpen = false;
+    return NextResponse.json(responseBody, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch {
     if (transactionOpen) {
       await client.query("ROLLBACK");

@@ -3,6 +3,13 @@ import { adminSessionCookie, currentAdmin } from "../../../../../src/auth/admin-
 import { currentCatalogActor } from "../../../../../src/auth/catalog-auth.js";
 import { currentEmployee, employeeSessionCookie } from "../../../../../src/auth/employee-auth.js";
 import { database } from "../../../../../src/db.js";
+import {
+  claimIdempotency,
+  completeIdempotency,
+  idempotencyResponse,
+  missingIdempotencyKeyResponse,
+  requestIdempotencyKey,
+} from "../../../../../src/idempotency.js";
 
 export const runtime = "nodejs";
 
@@ -145,22 +152,43 @@ export async function PATCH(request, { params }) {
   const { id: rawId } = await params;
   const transactionId = requiredId(rawId);
   if (!transactionId) return invalidRequest();
+  const idempotencyKey = requestIdempotencyKey(request);
+  if (!idempotencyKey) return missingIdempotencyKeyResponse();
 
   let body;
+  let payload;
   try {
-    body = await request.json();
+    const rawBody = await request.text();
+    try {
+      body = JSON.parse(rawBody);
+      payload = body;
+    } catch {
+      payload = { unparsedJson: rawBody };
+    }
   } catch {
     return invalidRequest();
   }
-  if (!body || typeof body !== "object" || Array.isArray(body)
-    || !Object.hasOwn(body, "expectedRevision")
-    || (body.expectedRevision !== null && !requiredId(body.expectedRevision))) {
-    return invalidRequest();
-  }
-
   const client = await database().connect();
   try {
     await client.query("BEGIN");
+    const claim = await claimIdempotency(client, {
+      actor,
+      scope: `inventory/history/${transactionId}`,
+      key: idempotencyKey,
+      payload,
+    });
+    const priorResponse = idempotencyResponse(claim);
+    if (priorResponse) {
+      await client.query("ROLLBACK");
+      return priorResponse;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)
+      || !Object.hasOwn(body, "expectedRevision")
+      || (body.expectedRevision !== null && !requiredId(body.expectedRevision))) {
+      await client.query("ROLLBACK");
+      return invalidRequest();
+    }
+
     const transactionResult = await client.query(
       `SELECT t.id, t.operation_type, t.product_spec_id, t.location_id, t.target_location_id,
               t.case_count, t.loose_count, t.actual_occurred_at, t.note,
@@ -309,10 +337,8 @@ export async function PATCH(request, { params }) {
        RETURNING id, corrected_at`,
       [transactionId, actor.account, actorDisplayName, actor.sourceSystem, before, after],
     );
-    await client.query("COMMIT");
-
     const correction = correctionResult.rows[0];
-    return NextResponse.json({
+    const responseBody = {
       correction: {
         id: String(correction.id),
         actor: { account: actor.account, displayName: actorDisplayName },
@@ -321,7 +347,11 @@ export async function PATCH(request, { params }) {
         before,
         after,
       },
-    }, {
+    };
+    await completeIdempotency(client, claim.id, 200, responseBody);
+    await client.query("COMMIT");
+
+    return NextResponse.json(responseBody, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

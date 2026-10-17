@@ -93,6 +93,7 @@ function requestCorrection(transactionId, correction, cookie, sourceSystem) {
       "Content-Type": "application/json",
       "X-Inventory-Source-System": sourceSystem
         ?? (cookie.startsWith("employee_session=") ? "employee" : "admin"),
+      "Idempotency-Key": randomBytes(16).toString("hex"),
     },
     body: JSON.stringify(correction),
   });
@@ -121,7 +122,7 @@ function requestLocation(location, cookie) {
 function requestInbound(transaction, cookie) {
   return request("/api/inventory/inbound", {
     method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    headers: { Cookie: cookie, "Content-Type": "application/json", "Idempotency-Key": randomBytes(16).toString("hex") },
     body: JSON.stringify(transaction),
   });
 }
@@ -129,7 +130,7 @@ function requestInbound(transaction, cookie) {
 function requestOutbound(transaction, cookie) {
   return request("/api/inventory/outbound", {
     method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    headers: { Cookie: cookie, "Content-Type": "application/json", "Idempotency-Key": randomBytes(16).toString("hex") },
     body: JSON.stringify(transaction),
   });
 }
@@ -137,7 +138,7 @@ function requestOutbound(transaction, cookie) {
 function requestMove(transaction, cookie) {
   return request("/api/inventory/move", {
     method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    headers: { Cookie: cookie, "Content-Type": "application/json", "Idempotency-Key": randomBytes(16).toString("hex") },
     body: JSON.stringify(transaction),
   });
 }
@@ -145,7 +146,7 @@ function requestMove(transaction, cookie) {
 function requestSplit(transaction, cookie) {
   return request("/api/inventory/split", {
     method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    headers: { Cookie: cookie, "Content-Type": "application/json", "Idempotency-Key": randomBytes(16).toString("hex") },
     body: JSON.stringify(transaction),
   });
 }
@@ -325,18 +326,14 @@ test("admin and employee can read the same inbound business record with its hist
   const outbound = await outboundResponse.json();
 
   const moveAt = "2026-10-16T12:15:00.000Z";
-  const moveResponse = await request("/api/inventory/move", {
-    method: "POST",
-    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const moveResponse = await requestMove({
       productSpecId: createdProduct.id,
       sourceLocationId: createdProduct.locationId,
       targetLocationId: createdSecondLocation.locationId,
       cases: 1,
       loose: 1,
       actualOccurredAt: moveAt,
-    }),
-  });
+    }, adminCookie);
   assert.equal(moveResponse.status, 201);
   const move = await moveResponse.json();
 

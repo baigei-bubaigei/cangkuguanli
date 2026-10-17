@@ -80,6 +80,7 @@ function post(path, body, cookie) {
     headers: {
       ...(cookie ? { Cookie: cookie } : {}),
       "Content-Type": "application/json",
+      "Idempotency-Key": randomBytes(16).toString("hex"),
     },
     body: JSON.stringify(body),
   });

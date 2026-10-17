@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
 
 function localDateTimeNow() {
   const now = new Date();
@@ -20,6 +21,7 @@ export default function MoveForm({ products, initialProductId, initialSourceLoca
   const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const submissionRef = useRef(null);
   const selectedProduct = products.find((product) => product.id === productSpecId);
   const sourceLocation = selectedProduct?.locations.find((location) => location.id === sourceLocationId);
   const targetLocation = selectedProduct?.locations.find((location) => location.id === targetLocationId);
@@ -63,25 +65,27 @@ export default function MoveForm({ products, initialProductId, initialSourceLoca
 
     setPending(true);
     try {
-      const response = await fetch("/api/inventory/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productSpecId,
-          sourceLocationId,
-          targetLocationId,
-          cases: caseCount,
-          loose: looseCount,
-          actualOccurredAt: new Date(actualOccurredAt).toISOString(),
-          note,
-        }),
-      });
+      const payload = {
+        productSpecId,
+        sourceLocationId,
+        targetLocationId,
+        cases: caseCount,
+        loose: looseCount,
+        actualOccurredAt: new Date(actualOccurredAt).toISOString(),
+        note,
+      };
+      const response = await fetch("/api/inventory/move", inventoryMutationOptions(
+        submissionRef,
+        "/api/inventory/move",
+        payload,
+      ));
       const result = await response.json();
       if (!response.ok) {
         setError(result.error || "移库未完成，请检查资料后重试。");
         return;
       }
 
+      completeInventoryMutation(submissionRef);
       await onSaved();
     } catch {
       setError("移库未完成，当前输入已保留，请检查网络后重试。");

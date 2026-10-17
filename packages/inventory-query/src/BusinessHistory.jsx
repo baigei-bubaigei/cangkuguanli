@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
 import "./inventory-query.css";
 
 const typeFilters = [
@@ -74,6 +75,7 @@ export default function BusinessHistory({ sourceSystem }) {
   const [editValues, setEditValues] = useState(null);
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState("");
+  const submissionRef = useRef(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -120,20 +122,20 @@ export default function BusinessHistory({ sourceSystem }) {
       if (editingRecord.operationType !== "split") body.loose = Number(editValues.loose);
       if (editingRecord.operationType === "move") body.note = editValues.note;
 
-      const response = await fetch(`/api/inventory/history/${editingRecord.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Inventory-Source-System": sourceSystem,
-        },
-        body: JSON.stringify(body),
-      });
+      const url = `/api/inventory/history/${editingRecord.id}`;
+      const response = await fetch(url, inventoryMutationOptions(
+        submissionRef,
+        url,
+        body,
+        { method: "PATCH", headers: { "X-Inventory-Source-System": sourceSystem } },
+      ));
       const result = await response.json();
       if (!response.ok) {
         setCorrectionError(result.error || "更正未完成，现有记录未改变，请刷新后重试。");
         return;
       }
 
+      completeInventoryMutation(submissionRef);
       setEditingRecord(null);
       setEditValues(null);
       setRefreshKey((current) => current + 1);
