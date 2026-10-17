@@ -276,3 +276,102 @@ test("only administrators can create and list persisted employee accounts", asyn
   await request("/api/employee/auth/session", { method: "DELETE", headers: { Cookie: employeeCookie } });
   await request("/api/admin/auth/session", { method: "DELETE", headers: { Cookie: adminCookie } });
 });
+
+test("administrators can enable and disable employee accounts, including existing sessions", async () => {
+  const adminLogin = await login("admin", adminAccount, adminPassword);
+  assert.equal(adminLogin.status, 200);
+  const adminCookie = cookieFrom(adminLogin, "admin_session");
+
+  const employeeLogin = await login("employee", existingEmployeeAccount, employeePassword);
+  assert.equal(employeeLogin.status, 200);
+  const employeeCookie = cookieFrom(employeeLogin, "employee_session");
+
+  const initialList = await request("/api/admin/employees", {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(initialList.status, 200);
+  const employee = (await initialList.json()).find((item) => item.account === existingEmployeeAccount);
+  assert.ok(employee, "the employee should be available from the administrator list");
+  assert.equal(employee.status, "active");
+
+  const togglePath = `/api/admin/employees/${employee.id}`;
+  const employeeToggle = await request(togglePath, {
+    method: "PATCH",
+    headers: { Cookie: employeeCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "disabled" }),
+  });
+  assert.equal(employeeToggle.status, 401);
+
+  const anonymousToggle = await request(togglePath, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "disabled" }),
+  });
+  assert.equal(anonymousToggle.status, 401);
+
+  const invalidStatus = await request(togglePath, {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "pending" }),
+  });
+  assert.equal(invalidStatus.status, 400);
+
+  const unknownEmployee = await request("/api/admin/employees/9223372036854775807", {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "disabled" }),
+  });
+  assert.equal(unknownEmployee.status, 404);
+
+  const disabledResponse = await request(togglePath, {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "disabled" }),
+  });
+  assert.equal(disabledResponse.status, 200);
+  assert.equal((await disabledResponse.json()).status, "disabled");
+
+  const refreshedList = await request("/api/admin/employees", {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(refreshedList.status, 200);
+  assert.equal(
+    (await refreshedList.json()).find((item) => item.account === existingEmployeeAccount).status,
+    "disabled",
+  );
+
+  const existingBusinessSession = await request("/api/catalog/products", {
+    headers: { Cookie: employeeCookie },
+  });
+  assert.equal(existingBusinessSession.status, 401);
+  const existingInventorySession = await request("/api/inventory", {
+    headers: { Cookie: employeeCookie },
+  });
+  assert.equal(existingInventorySession.status, 401);
+
+  const disabledSession = await request("/api/employee/auth/session", {
+    headers: { Cookie: employeeCookie },
+  });
+  assert.equal(disabledSession.status, 401);
+
+  const disabledLogin = await login("employee", existingEmployeeAccount, employeePassword);
+  assert.equal(disabledLogin.status, 401);
+  assert.equal(disabledLogin.headers.has("set-cookie"), false);
+
+  const enabledResponse = await request(togglePath, {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "active" }),
+  });
+  assert.equal(enabledResponse.status, 200);
+  assert.equal((await enabledResponse.json()).status, "active");
+
+  const enabledLogin = await login("employee", existingEmployeeAccount, employeePassword);
+  assert.equal(enabledLogin.status, 200);
+  await request("/api/employee/auth/session", {
+    method: "DELETE",
+    headers: { Cookie: cookieFrom(enabledLogin, "employee_session") },
+  });
+  await request("/api/employee/auth/session", { method: "DELETE", headers: { Cookie: employeeCookie } });
+  await request("/api/admin/auth/session", { method: "DELETE", headers: { Cookie: adminCookie } });
+});

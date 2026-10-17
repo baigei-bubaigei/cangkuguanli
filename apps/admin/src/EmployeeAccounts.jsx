@@ -16,6 +16,7 @@ export default function EmployeeAccounts() {
   const [account, setAccount] = useState("");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [pendingEmployeeId, setPendingEmployeeId] = useState("");
   const [temporaryCredential, setTemporaryCredential] = useState(null);
 
   useEffect(() => {
@@ -73,6 +74,33 @@ export default function EmployeeAccounts() {
       setMessage("暂时无法连接管理员系统，请检查网络后重试。");
     } finally {
       setPending(false);
+    }
+  }
+
+  async function changeEmployeeStatus(employee) {
+    const nextStatus = employee.status === "active" ? "disabled" : "active";
+    setPendingEmployeeId(employee.id);
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employee.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setMessage(result.error || "员工账号状态更新失败，请稍后重试。");
+        return;
+      }
+
+      setAccounts((current) => current.map((item) => (
+        item.id === result.id ? { ...item, status: result.status } : item
+      )));
+    } catch {
+      setMessage("暂时无法连接管理员系统，请检查网络后重试。");
+    } finally {
+      setPendingEmployeeId("");
     }
   }
 
@@ -165,7 +193,7 @@ export default function EmployeeAccounts() {
       <div className="employee-accounts-table-wrap">
         <table className="employee-accounts-table">
           <thead>
-            <tr><th>员工</th><th>登录账号</th><th>状态</th><th>创建日期</th></tr>
+            <tr><th>员工</th><th>登录账号</th><th>状态</th><th>创建日期</th><th>操作</th></tr>
           </thead>
           <tbody>
             {accounts.map((employee) => (
@@ -176,13 +204,26 @@ export default function EmployeeAccounts() {
                   {employee.status === "active" ? "启用" : "停用"}
                 </span></td>
                 <td>{createdDate(employee.createdAt)}</td>
+                <td>
+                  <button
+                    className="employee-account-toggle"
+                    type="button"
+                    aria-label={`${employee.status === "active" ? "停用" : "启用"}员工账号 ${employee.displayName}`}
+                    disabled={pendingEmployeeId !== ""}
+                    onClick={() => changeEmployeeStatus(employee)}
+                  >
+                    {pendingEmployeeId === employee.id
+                      ? "正在更新…"
+                      : employee.status === "active" ? "停用账号" : "启用账号"}
+                  </button>
+                </td>
               </tr>
             ))}
             {status === "ready" && accounts.length === 0 && (
-              <tr><td className="employee-accounts-empty" colSpan={4}>暂无员工账号</td></tr>
+              <tr><td className="employee-accounts-empty" colSpan={5}>暂无员工账号</td></tr>
             )}
             {status === "loading" && (
-              <tr><td className="employee-accounts-empty" colSpan={4}>正在读取员工账号…</td></tr>
+              <tr><td className="employee-accounts-empty" colSpan={5}>正在读取员工账号…</td></tr>
             )}
           </tbody>
         </table>

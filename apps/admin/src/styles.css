@@ -110,6 +110,8 @@ a { color: inherit; text-decoration: none; }
 .employee-account-status { display: inline-flex; padding: 4px 8px; border-radius: 12px; font-size: 10px; }
 .employee-account-status-active { color: #426852; background: #edf5ef; }
 .employee-account-status-disabled { color: #8b5a5a; background: #fbefef; }
+.employee-account-toggle { padding: 6px 10px; border: 1px solid #dce4df; border-radius: 6px; color: #405149; background: #fff; font-size: 11px; }
+.employee-account-toggle:hover:not(:disabled) { border-color: #a9c2b2; background: #f5f8f5; }
 .employee-accounts-table .employee-accounts-empty { padding: 34px 18px; color: #87958e; text-align: center; }
 .mobile-menu-button, .mobile-scrim { display: none; }
 
