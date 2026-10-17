@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import InboundForm from "./InboundForm.jsx";
 import OutboundForm from "./OutboundForm.jsx";
 import SplitForm from "./SplitForm.jsx";
@@ -9,6 +9,7 @@ export default function InventoryQuery() {
   const [status, setStatus] = useState("loading");
   const [query, setQuery] = useState("");
   const [warehouse, setWarehouse] = useState("");
+  const [expandedProductId, setExpandedProductId] = useState(null);
   const [inboundContext, setInboundContext] = useState(null);
   const [outboundContext, setOutboundContext] = useState(null);
   const [splitContext, setSplitContext] = useState(null);
@@ -140,57 +141,126 @@ export default function InventoryQuery() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
-                <tr className="inventory-query-row" key={product.id}>
-                  <td className="inventory-query-product">
-                    <strong>{product.name}</strong>
-                    <small>{product.spec}</small>
-                  </td>
-                  <td>{product.perCase} 个 / 件</td>
-                  <td>{product.locations.length} 个货位</td>
-                  <td className="inventory-query-quantity">
-                    <strong>{product.totalCases}</strong> 件
-                  </td>
-                  <td className="inventory-query-quantity">
-                    <strong>{product.totalLoose}</strong> 个
-                  </td>
-                  <td className="inventory-query-action">
-                    <button
-                      className="inventory-query-inbound-toggle"
-                      type="button"
-                      onClick={() => {
-                        setOutboundContext(null);
-                        setSplitContext(null);
-                        setInboundContext({ productId: product.id });
-                      }}
-                    >
-                      入库
-                    </button>
-                    <button
-                      className="inventory-query-outbound-toggle"
-                      type="button"
-                      onClick={() => {
-                        setInboundContext(null);
-                        setSplitContext(null);
-                        setOutboundContext({ productId: product.id });
-                      }}
-                    >
-                      出库
-                    </button>
-                    <button
-                      className="inventory-query-split-toggle"
-                      type="button"
-                      onClick={() => {
-                        setInboundContext(null);
-                        setOutboundContext(null);
-                        setSplitContext({ productId: product.id });
-                      }}
-                    >
-                      拆件
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {products.map((product) => {
+                const expanded = expandedProductId === product.id;
+                const detailId = `inventory-location-detail-${product.id}`;
+                const toggleDetails = () => {
+                  setExpandedProductId((currentId) => currentId === product.id ? null : product.id);
+                };
+
+                return (
+                  <Fragment key={product.id}>
+                    <tr className="inventory-query-row">
+                      <td className="inventory-query-product">
+                        <button
+                          className="inventory-query-product-toggle"
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={expanded ? detailId : undefined}
+                          onClick={toggleDetails}
+                        >
+                          <strong>{product.name}</strong>
+                          <small>{product.spec}</small>
+                        </button>
+                      </td>
+                      <td>{product.perCase} 个 / 件</td>
+                      <td>
+                        <button
+                          className="inventory-query-location-toggle"
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={expanded ? detailId : undefined}
+                          onClick={toggleDetails}
+                        >
+                          {product.locations.length} 个货位 <span>{expanded ? "收起" : "查看"}</span>
+                        </button>
+                      </td>
+                      <td className="inventory-query-quantity">
+                        <strong>{product.totalCases}</strong> 件
+                      </td>
+                      <td className="inventory-query-quantity">
+                        <strong>{product.totalLoose}</strong> 个
+                      </td>
+                      <td className="inventory-query-action">
+                        <button
+                          className="inventory-query-inbound-toggle"
+                          type="button"
+                          onClick={() => {
+                            setOutboundContext(null);
+                            setSplitContext(null);
+                            setInboundContext({ productId: product.id });
+                          }}
+                        >
+                          入库
+                        </button>
+                        <button
+                          className="inventory-query-outbound-toggle"
+                          type="button"
+                          onClick={() => {
+                            setInboundContext(null);
+                            setSplitContext(null);
+                            setOutboundContext({ productId: product.id });
+                          }}
+                        >
+                          出库
+                        </button>
+                        <button
+                          className="inventory-query-split-toggle"
+                          type="button"
+                          onClick={() => {
+                            setInboundContext(null);
+                            setOutboundContext(null);
+                            setSplitContext({ productId: product.id });
+                          }}
+                        >
+                          拆件
+                        </button>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="inventory-query-detail-row" id={detailId}>
+                        <td colSpan={6}>
+                          <div className="inventory-query-detail">
+                            <div className="inventory-query-detail-head">
+                              <span>货位明细</span>
+                              <span>每件 {product.perCase} 个</span>
+                            </div>
+                            <div className="inventory-query-detail-list">
+                              {product.locations.map((location) => (
+                                <div className="inventory-query-location" key={location.id}>
+                                  <span className="inventory-query-location-name">
+                                    <small>{location.warehouse}</small>
+                                    {location.spot}
+                                  </span>
+                                  <span className="inventory-query-location-cases">
+                                    <strong>{location.cases}</strong> 件
+                                  </span>
+                                  <span className="inventory-query-location-loose">
+                                    <strong>{location.loose}</strong> 个
+                                  </span>
+                                  <span className="inventory-query-location-actions">
+                                    <button
+                                      className="inventory-query-inbound-toggle"
+                                      type="button"
+                                      onClick={() => {
+                                        setOutboundContext(null);
+                                        setSplitContext(null);
+                                        setInboundContext({ productId: product.id, locationId: location.id });
+                                      }}
+                                    >
+                                      入库
+                                    </button>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
