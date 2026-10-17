@@ -80,6 +80,40 @@ export default function App() {
     }
   }
 
+  async function handleFirstPasswordChange(event) {
+    event.preventDefault();
+    setPending(true);
+    setMessage("");
+
+    const form = new FormData(event.currentTarget);
+    const password = form.get("password");
+    if (password !== form.get("confirmPassword")) {
+      setMessage("两次输入的新密码不一致。");
+      setPending(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/employee/auth/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        setMessage(result.error || "密码修改失败，请重试。");
+        return;
+      }
+
+      setEmployee((current) => ({ ...current, mustChangePassword: false }));
+      setActivePage("库存查询");
+    } catch {
+      setMessage("暂时无法连接员工系统，请检查网络后重试。");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleLogout() {
     setPending(true);
     setMessage("");
@@ -152,6 +186,50 @@ export default function App() {
             </form>
             <div className="login-separator"><span>当前入口</span></div>
             <div className="login-entry-name">员工系统<span>· 独立账号</span></div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (employee?.mustChangePassword) {
+    return (
+      <main className="login-page">
+        <section className="login-side" aria-label="员工系统">
+          <a className="brand-lockup" href="/" aria-label="仓库库存管理">
+            <span className="brand-mark" aria-hidden="true">仓</span>
+            <span>仓库库存管理</span>
+          </a>
+          <div className="login-message">
+            <p className="eyebrow">EMPLOYEE PORTAL</p>
+            <h1>首次登录<br />请修改密码</h1>
+            <p>完成修改后即可进入员工系统。</p>
+          </div>
+          <span className="login-side-foot">员工系统</span>
+        </section>
+
+        <section className="login-panel" aria-labelledby="first-password-title">
+          <div className="login-form-wrap">
+            <p className="eyebrow">首次登录</p>
+            <h2 id="first-password-title">修改初始密码</h2>
+            <p className="muted">请设置新的登录密码后继续使用员工系统。</p>
+            <form className="form-stack" onSubmit={handleFirstPasswordChange}>
+              <label className="field">
+                <span>新密码</span>
+                <input name="password" type="password" autoComplete="new-password" required />
+              </label>
+              <label className="field">
+                <span>确认新密码</span>
+                <input name="confirmPassword" type="password" autoComplete="new-password" required />
+              </label>
+              {message && <p className="form-error" role="alert">{message}</p>}
+              <button className="button button-dark button-wide" type="submit" disabled={pending}>
+                {pending ? "正在保存…" : "保存并进入员工系统"}
+              </button>
+            </form>
+            <button className="logout-button" type="button" onClick={handleLogout} disabled={pending}>
+              退出员工系统
+            </button>
           </div>
         </section>
       </main>

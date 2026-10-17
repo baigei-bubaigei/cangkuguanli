@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { database } from "../db.js";
-import { verifyPassword } from "./password.js";
+import { hashPassword, verifyPassword } from "./password.js";
 
 export const employeeSessionCookie = "employee_session";
 
@@ -10,7 +10,7 @@ function hashSessionToken(token) {
 
 export async function loginEmployee(account, password) {
   const result = await database().query(
-    `SELECT id, account, display_name, password_hash, status
+    `SELECT id, account, display_name, password_hash, status, must_change_password
        FROM employee_accounts
       WHERE account = $1`,
     [account],
@@ -26,10 +26,13 @@ export async function loginEmployee(account, password) {
     [hashSessionToken(token), row.id],
   );
 
-  return {
-    token,
-    employee: { account: row.account, displayName: row.display_name },
+  const employee = {
+    account: row.account,
+    displayName: row.display_name,
   };
+  if (row.must_change_password) employee.mustChangePassword = true;
+
+  return { token, employee };
 }
 
 export async function currentEmployee(token) {
@@ -39,10 +42,57 @@ export async function currentEmployee(token) {
        JOIN employee_accounts e ON e.id = s.employee_account_id
       WHERE s.token_hash = $1
         AND s.revoked_at IS NULL
-        AND e.status = 'active'`,
+        AND e.status = 'active'
+        AND e.must_change_password = FALSE`,
     [hashSessionToken(token)],
   );
   return result.rows[0] ?? null;
+}
+
+export async function currentEmployeeSession(token) {
+  const result = await database().query(
+    `SELECT e.account, e.display_name AS "displayName",
+            e.must_change_password AS "mustChangePassword"
+       FROM employee_sessions s
+       JOIN employee_accounts e ON e.id = s.employee_account_id
+      WHERE s.token_hash = $1
+        AND s.revoked_at IS NULL
+        AND e.status = 'active'`,
+    [hashSessionToken(token)],
+  );
+  const employee = result.rows[0];
+  if (!employee) return null;
+  if (employee.mustChangePassword) return employee;
+  return { account: employee.account, displayName: employee.displayName };
+}
+
+export async function changeEmployeePassword(token, password) {
+  const tokenHash = hashSessionToken(token);
+  const result = await database().query(
+    `SELECT e.id, e.password_hash
+       FROM employee_sessions s
+       JOIN employee_accounts e ON e.id = s.employee_account_id
+      WHERE s.token_hash = $1
+        AND s.revoked_at IS NULL
+        AND e.status = 'active'
+        AND e.must_change_password = TRUE`,
+    [tokenHash],
+  );
+  const employee = result.rows[0];
+  if (!employee) return "not-required";
+  if (await verifyPassword(password, employee.password_hash)) return "same-password";
+
+  const passwordHash = await hashPassword(password);
+  const updated = await database().query(
+    `UPDATE employee_accounts
+        SET password_hash = $1,
+            must_change_password = FALSE
+      WHERE id = $2
+        AND status = 'active'
+        AND must_change_password = TRUE`,
+    [passwordHash, employee.id],
+  );
+  return updated.rowCount ? "changed" : "not-required";
 }
 
 export async function logoutEmployee(token) {

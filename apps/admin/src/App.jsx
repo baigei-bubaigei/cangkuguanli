@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ProductCatalog from "@cangkuguanli/product-catalog";
 import InventoryQuery from "@cangkuguanli/inventory-query";
+import EmployeeAccounts from "./EmployeeAccounts.jsx";
 
 const adminPages = [
   { label: "库存查询", group: "业务" },
@@ -241,6 +242,8 @@ export default function App() {
             <InventoryQuery />
           ) : activePage === "产品与货位" ? (
             <ProductCatalog />
+          ) : activePage === "员工账号" ? (
+            <EmployeeAccounts />
           ) : (
             <section className="page-placeholder" aria-live="polite">
               <span className="system-badge">管理员系统</span>
