@@ -137,6 +137,28 @@
 .business-history-change { white-space: nowrap; }
 .business-history-location { line-height: 1.5; }
 .business-history-footer { display: flex; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid #edf0ed; color: #9aa69f; font-size: 10px; }
+.business-history-correct { display: block; margin-top: 8px; padding: 5px 8px; border: 1px solid #d8e2dc; border-radius: 6px; color: #426852; background: #f6faf7; font: inherit; font-size: 10px; cursor: pointer; }
+.business-history-correct:hover { border-color: #9ab5a3; background: #edf5ef; }
+.business-history-correct:focus-visible, .business-history-corrections summary:focus-visible, .business-history-correction-close:focus-visible { outline: 2px solid #6a9c82; outline-offset: 2px; }
+.business-history-corrections { max-width: 250px; margin-top: 8px; color: #52645a; font-size: 10px; white-space: normal; }
+.business-history-corrections summary { cursor: pointer; }
+.business-history-correction { padding: 8px 0 3px; border-top: 1px solid #e8eeea; }
+.business-history-correction strong, .business-history-correction small { display: block; margin-top: 4px; }
+.business-history-correction p { margin: 5px 0 0; color: #75837c; line-height: 1.5; overflow-wrap: anywhere; }
+.business-history-correction-backdrop { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 20px; background: rgb(23 36 29 / 42%); }
+.business-history-correction-dialog { width: min(100%, 470px); max-height: min(92dvh, 720px); overflow-y: auto; padding: 24px; border: 1px solid #e5ebe6; border-radius: 16px; background: #fff; box-shadow: 0 24px 72px rgb(31 48 39 / 20%); }
+.business-history-correction-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.business-history-correction-heading p { margin: 0 0 5px; color: #829188; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.business-history-correction-heading h2 { margin: 0; color: #2e4139; font-size: 19px; }
+.business-history-correction-close { width: 32px; height: 32px; border: 1px solid #e5ebe6; border-radius: 8px; color: #596b61; background: #fff; font-size: 21px; line-height: 1; cursor: pointer; }
+.business-history-correction-description { margin: 12px 0 18px; color: #7b8981; font-size: 12px; line-height: 1.6; }
+.business-history-correction-form { display: grid; gap: 14px; }
+.business-history-correction-form > label, .business-history-correction-counts label { display: grid; gap: 6px; color: #52645a; font-size: 11px; font-weight: 600; }
+.business-history-correction-form input { width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid #dfe7e1; border-radius: 8px; color: #34463d; background: #fff; font: inherit; font-size: 12px; }
+.business-history-correction-form small { color: #87958e; font-size: 10px; font-weight: 400; }
+.business-history-correction-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.business-history-correction-error { margin: 0; color: #a14343; font-size: 12px; }
+.business-history-correction-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 4px; }
 
 @media (max-width: 760px) {
   .inventory-query-actions { flex-wrap: wrap; justify-content: flex-start; }
@@ -150,4 +172,8 @@
   .business-history-filters { align-items: stretch; flex-direction: column; }
   .business-history-search, .business-history-source { width: 100%; }
   .business-history-footer { padding: 11px 13px; font-size: 9px; }
+  .business-history-correction-backdrop { padding: 12px; }
+  .business-history-correction-dialog { padding: 19px; }
+  .business-history-correction-actions { flex-direction: column-reverse; }
+  .business-history-correction-actions .button { width: 100%; }
 }

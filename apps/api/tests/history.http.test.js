@@ -85,6 +85,23 @@ function requestHistory(cookie, filters = "") {
   });
 }
 
+function requestCorrection(transactionId, correction, cookie, sourceSystem) {
+  return request("/api/inventory/history/" + transactionId, {
+    method: "PATCH",
+    headers: {
+      Cookie: cookie,
+      "Content-Type": "application/json",
+      "X-Inventory-Source-System": sourceSystem
+        ?? (cookie.startsWith("employee_session=") ? "employee" : "admin"),
+    },
+    body: JSON.stringify(correction),
+  });
+}
+
+function requestInventory(cookie) {
+  return request("/api/inventory", { headers: { Cookie: cookie } });
+}
+
 function requestProduct(product, cookie) {
   return request("/api/catalog/products", {
     method: "POST",
@@ -258,6 +275,7 @@ test("admin and employee can read the same inbound business record with its hist
   assert.deepEqual(adminHistory, {
     records: [{
       id: inbound.transactionId,
+      revisionId: null,
       operationType: "inbound",
       product: {
         id: createdProduct.id,
@@ -278,6 +296,7 @@ test("admin and employee can read the same inbound business record with its hist
       actor: { account: adminAccount, displayName: "T12 测试管理员" },
       sourceSystem: "admin",
       note: "",
+      corrections: [],
     }],
   });
 
@@ -345,6 +364,7 @@ test("admin and employee can read the same inbound business record with its hist
   ]);
   assert.deepEqual(allAdminHistory.records[0], {
     id: split.transactionId,
+    revisionId: null,
     operationType: "split",
     product: {
       id: createdProduct.id,
@@ -365,6 +385,7 @@ test("admin and employee can read the same inbound business record with its hist
     actor: { account: employeeAccount, displayName: "T12 测试员工" },
     sourceSystem: "employee",
     note: "",
+    corrections: [],
   });
   assert.equal(allAdminHistory.records[1].operationType, "move");
   assert.equal(allAdminHistory.records[1].sourceSystem, "admin");
@@ -395,4 +416,210 @@ test("admin and employee can read the same inbound business record with its hist
   const noResultsResponse = await requestHistory(adminCookie, "?type=initial");
   assert.equal(noResultsResponse.status, 200);
   assert.deepEqual(await noResultsResponse.json(), { records: [] });
+});
+
+test("admin and employee can correct supported inventory entries without losing their before and after history", async () => {
+  const adminCookie = await login("admin", adminAccount);
+  const employeeCookie = await login("employee", employeeAccount);
+  const product = {
+    name: accountPrefix + " 更正产品",
+    category: "木制品",
+    categoryName: "家具",
+    spec: "四个一件",
+    perCase: 4,
+    note: "",
+    warehouse: accountPrefix + " 更正仓库",
+    spot: "A 位",
+  };
+  const productResponse = await requestProduct(product, adminCookie);
+  assert.equal(productResponse.status, 201);
+  const createdProduct = await productResponse.json();
+  const secondLocationResponse = await requestLocation({
+    productSpecId: createdProduct.id,
+    warehouse: product.warehouse,
+    spot: "B 位",
+  }, employeeCookie);
+  assert.equal(secondLocationResponse.status, 201);
+  const secondLocation = await secondLocationResponse.json();
+
+  const anonymousCorrection = await requestCorrection("1", {
+    expectedRevision: null,
+    cases: 1,
+  }, "");
+  assert.equal(anonymousCorrection.status, 401);
+
+  const inboundResponse = await requestInbound({
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 5,
+    loose: 4,
+    actualOccurredAt: "2026-10-14T10:00:00.000Z",
+  }, adminCookie);
+  assert.equal(inboundResponse.status, 201);
+  const inbound = await inboundResponse.json();
+  const mismatchedSourceCookie = await requestCorrection(inbound.transactionId, {
+    expectedRevision: null,
+    cases: 4,
+  }, adminCookie, "employee");
+  assert.equal(mismatchedSourceCookie.status, 401);
+
+  const inboundCorrectionResponse = await requestCorrection(inbound.transactionId, {
+    expectedRevision: null,
+    cases: 4,
+    loose: 3,
+    actualOccurredAt: "2026-10-14T09:45:00.000Z",
+  }, adminCookie + "; " + employeeCookie, "employee");
+  assert.equal(inboundCorrectionResponse.status, 200);
+
+  const staleInboundCorrection = await requestCorrection(inbound.transactionId, {
+    expectedRevision: null,
+    cases: 3,
+    loose: 3,
+  }, adminCookie);
+  assert.equal(staleInboundCorrection.status, 409);
+  assert.match((await staleInboundCorrection.json()).error, /已被其他人更正/);
+
+  const additionalInboundResponse = await requestInbound({
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 2,
+    loose: 0,
+    actualOccurredAt: "2026-10-14T11:00:00.000Z",
+  }, adminCookie);
+  assert.equal(additionalInboundResponse.status, 201);
+  const additionalInbound = await additionalInboundResponse.json();
+
+  const outboundResponse = await requestOutbound({
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 1,
+    loose: 1,
+    actualOccurredAt: "2026-10-14T12:00:00.000Z",
+  }, employeeCookie);
+  assert.equal(outboundResponse.status, 201);
+  const outbound = await outboundResponse.json();
+  const outboundCorrectionResponse = await requestCorrection(outbound.transactionId, {
+    expectedRevision: null,
+    cases: 2,
+    loose: 1,
+  }, adminCookie);
+  assert.equal(outboundCorrectionResponse.status, 200);
+  const outboundCorrection = await outboundCorrectionResponse.json();
+  const excessiveOutboundCorrection = await requestCorrection(outbound.transactionId, {
+    expectedRevision: outboundCorrection.correction.id,
+    cases: 20,
+    loose: 1,
+  }, employeeCookie);
+  assert.equal(excessiveOutboundCorrection.status, 409);
+  assert.match((await excessiveOutboundCorrection.json()).error, /库存不足/);
+  const inventoryAfterRejectedCorrectionResponse = await requestInventory(adminCookie);
+  assert.equal(inventoryAfterRejectedCorrectionResponse.status, 200);
+  const inventoryAfterRejectedCorrection = await inventoryAfterRejectedCorrectionResponse.json();
+  const productAfterRejectedCorrection = inventoryAfterRejectedCorrection.products.find((item) => item.id === createdProduct.id);
+  assert.equal(productAfterRejectedCorrection.locations.find((location) => location.id === createdProduct.locationId).cases, 4);
+  assert.equal(productAfterRejectedCorrection.locations.find((location) => location.id === createdProduct.locationId).loose, 2);
+
+  const moveResponse = await requestMove({
+    productSpecId: createdProduct.id,
+    sourceLocationId: createdProduct.locationId,
+    targetLocationId: secondLocation.locationId,
+    cases: 1,
+    loose: 1,
+    actualOccurredAt: "2026-10-14T13:00:00.000Z",
+    note: "原备注",
+  }, employeeCookie);
+  assert.equal(moveResponse.status, 201);
+  const move = await moveResponse.json();
+  const moveCorrectionResponse = await requestCorrection(move.transactionId, {
+    expectedRevision: null,
+    cases: 1,
+    loose: 2,
+    actualOccurredAt: "2026-10-14T13:15:00.000Z",
+    note: "更正后的备注",
+  }, adminCookie);
+  assert.equal(moveCorrectionResponse.status, 200);
+
+  const splitResponse = await requestSplit({
+    productSpecId: createdProduct.id,
+    locationId: createdProduct.locationId,
+    cases: 1,
+    actualOccurredAt: "2026-10-14T14:00:00.000Z",
+  }, employeeCookie);
+  assert.equal(splitResponse.status, 201);
+  const split = await splitResponse.json();
+  const splitCorrectionResponse = await requestCorrection(split.transactionId, {
+    expectedRevision: null,
+    cases: 2,
+  }, adminCookie);
+  assert.equal(splitCorrectionResponse.status, 200);
+
+  const inventoryResponse = await requestInventory(employeeCookie);
+  assert.equal(inventoryResponse.status, 200);
+  const inventory = await inventoryResponse.json();
+  const correctedProduct = inventory.products.find((item) => item.id === createdProduct.id);
+  assert.equal(correctedProduct.totalCases, 2);
+  assert.equal(correctedProduct.totalLoose, 10);
+  assert.deepEqual(correctedProduct.locations.map(({ id, cases, loose }) => ({ id, cases, loose })), [
+    { id: createdProduct.locationId, cases: 1, loose: 8 },
+    { id: secondLocation.locationId, cases: 1, loose: 2 },
+  ]);
+
+  const historyResponse = await requestHistory(employeeCookie);
+  assert.equal(historyResponse.status, 200);
+  const history = await historyResponse.json();
+  const correctedInbound = history.records.find((record) => record.id === inbound.transactionId);
+  assert.equal(correctedInbound.cases, 4);
+  assert.equal(correctedInbound.loose, 3);
+  assert.equal(correctedInbound.actualOccurredAt, "2026-10-14T09:45:00.000Z");
+  assert.equal(correctedInbound.actor.account, adminAccount);
+  assert.equal(correctedInbound.corrections.length, 1);
+  assert.equal(correctedInbound.revisionId, correctedInbound.corrections[0].id);
+  assert.equal(correctedInbound.corrections[0].actor.account, employeeAccount);
+  assert.equal(correctedInbound.corrections[0].actor.displayName, "T12 测试员工");
+  assert.equal(correctedInbound.corrections[0].sourceSystem, "employee");
+  assert.equal(correctedInbound.corrections[0].before.cases, 5);
+  assert.equal(correctedInbound.corrections[0].before.loose, 4);
+  assert.equal(correctedInbound.corrections[0].after.cases, 4);
+  assert.equal(correctedInbound.corrections[0].after.loose, 3);
+  assert.equal(typeof correctedInbound.corrections[0].correctedAt, "string");
+
+  const correctedOutbound = history.records.find((record) => record.id === outbound.transactionId);
+  assert.equal(correctedOutbound.cases, 2);
+  assert.equal(correctedOutbound.loose, 1);
+  const correctedMove = history.records.find((record) => record.id === move.transactionId);
+  assert.equal(correctedMove.cases, 1);
+  assert.equal(correctedMove.loose, 2);
+  assert.equal(correctedMove.note, "更正后的备注");
+  assert.equal(correctedMove.corrections[0].before.note, "原备注");
+  assert.equal(correctedMove.corrections[0].after.note, "更正后的备注");
+  assert.equal(correctedMove.corrections[0].actor.account, adminAccount);
+  assert.equal(correctedMove.corrections[0].sourceSystem, "admin");
+  const correctedSplit = history.records.find((record) => record.id === split.transactionId);
+  assert.equal(correctedSplit.cases, 2);
+  assert.equal(correctedSplit.loose, 8);
+
+  const concurrentResults = await Promise.all([
+    requestCorrection(additionalInbound.transactionId, {
+      expectedRevision: null,
+      cases: 1,
+    }, employeeCookie),
+    requestCorrection(additionalInbound.transactionId, {
+      expectedRevision: null,
+      cases: 3,
+    }, adminCookie),
+  ]);
+  assert.deepEqual(concurrentResults.map((response) => response.status).sort(), [200, 409]);
+  const afterConcurrentHistoryResponse = await requestHistory(adminCookie);
+  assert.equal(afterConcurrentHistoryResponse.status, 200);
+  const afterConcurrentHistory = await afterConcurrentHistoryResponse.json();
+  const concurrentWinner = afterConcurrentHistory.records.find((record) => record.id === additionalInbound.transactionId);
+  assert.equal(concurrentWinner.corrections.length, 1);
+  assert.ok(concurrentWinner.cases === 1 || concurrentWinner.cases === 3);
+  const afterConcurrentInventoryResponse = await requestInventory(adminCookie);
+  assert.equal(afterConcurrentInventoryResponse.status, 200);
+  const afterConcurrentInventory = await afterConcurrentInventoryResponse.json();
+  const finalProduct = afterConcurrentInventory.products.find((item) => item.id === createdProduct.id);
+  assert.equal(finalProduct.locations.find((location) => location.id === createdProduct.locationId).cases,
+    concurrentWinner.cases === 1 ? 0 : 2);
+  assert.equal(concurrentWinner.actor.account, adminAccount);
 });

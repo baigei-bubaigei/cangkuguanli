@@ -8,8 +8,10 @@ const operationTypes = new Set(["inbound", "outbound", "move", "split", "initial
 const sourceSystems = new Set(["admin", "employee"]);
 
 function historyRecord(row) {
+  const corrections = row.corrections;
   return {
     id: String(row.id),
+    revisionId: corrections.length ? corrections[corrections.length - 1].id : null,
     operationType: row.operation_type,
     product: {
       id: String(row.product_spec_id),
@@ -37,6 +39,7 @@ function historyRecord(row) {
     },
     sourceSystem: row.source_system,
     note: row.note,
+    corrections,
   };
 }
 
@@ -92,7 +95,37 @@ export async function GET(request) {
       [type, source, keyword],
     );
 
-    return NextResponse.json({ records: result.rows.map(historyRecord) }, {
+    const correctionsByTransaction = new Map(result.rows.map((row) => [String(row.id), []]));
+    if (result.rows.length) {
+      const correctionsResult = await client.query(
+        `SELECT transaction_id, id, actor_account_snapshot, actor_display_name_snapshot,
+                source_system, corrected_at, before_content, after_content
+           FROM inventory_transaction_corrections
+          WHERE transaction_id = ANY($1::BIGINT[])
+          ORDER BY transaction_id, id`,
+        [result.rows.map((row) => row.id)],
+      );
+      for (const correction of correctionsResult.rows) {
+        correctionsByTransaction.get(String(correction.transaction_id)).push({
+          id: String(correction.id),
+          actor: {
+            account: correction.actor_account_snapshot,
+            displayName: correction.actor_display_name_snapshot,
+          },
+          sourceSystem: correction.source_system,
+          correctedAt: correction.corrected_at.toISOString(),
+          before: correction.before_content,
+          after: correction.after_content,
+        });
+      }
+    }
+
+    return NextResponse.json({
+      records: result.rows.map((row) => historyRecord({
+        ...row,
+        corrections: correctionsByTransaction.get(String(row.id)),
+      })),
+    }, {
       headers: { "Cache-Control": "no-store" },
     });
   } finally {

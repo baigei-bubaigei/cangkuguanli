@@ -244,7 +244,7 @@ export default function App() {
           {activePage === "库存查询" ? (
             <InventoryQuery />
           ) : activePage === "库存业务记录" ? (
-            <BusinessHistory />
+            <BusinessHistory sourceSystem="admin" />
           ) : activePage === "产品与货位" ? (
             <ProductCatalog />
           ) : activePage === "员工账号" ? (
