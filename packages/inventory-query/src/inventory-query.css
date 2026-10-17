@@ -108,10 +108,46 @@
 .inventory-query-move-error { margin: 0; color: #a14343; font-size: 12px; }
 .inventory-query-move-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 4px; }
 
+.business-history { margin-top: 22px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.business-history-toolbar { display: grid; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.business-history-type-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+.business-history-type-filter button { padding: 7px 11px; border: 0; border-radius: 6px; color: #75837c; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.business-history-type-filter button:hover { color: #26362f; background: #f4f7f4; }
+.business-history-type-filter .business-history-type-active { color: #315348; background: #e9f3ee; font-weight: 700; }
+.business-history-type-filter button:focus-visible { outline: 2px solid #6a9c82; outline-offset: 2px; }
+.business-history-filters { display: flex; justify-content: flex-end; gap: 9px; }
+.business-history-filters label { display: grid; gap: 6px; color: #52645b; font-size: 11px; font-weight: 650; }
+.business-history-search { width: min(270px, 28vw); }
+.business-history-source { width: 160px; }
+.business-history-filters input, .business-history-filters select { width: 100%; min-width: 0; min-height: 37px; padding: 0 10px; border: 1px solid #dce4df; border-radius: 6px; outline: none; color: #26362f; background: #fff; font: inherit; font-weight: 400; }
+.business-history-filters input:focus, .business-history-filters select:focus { border-color: #6a9c82; box-shadow: 0 0 0 3px #e4f1e9; }
+.business-history-state { display: flex; min-height: 150px; align-items: center; justify-content: center; padding: 24px; color: var(--muted); font-size: 13px; text-align: center; }
+.business-history-table-wrap { width: 100%; overflow-x: auto; }
+.business-history-table { width: 100%; min-width: 860px; border-collapse: collapse; text-align: left; }
+.business-history-table th { height: 42px; padding: 0 16px; color: #87958e; background: #fafbf9; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.business-history-table td { padding: 13px 16px; border-top: 1px solid #eef1ee; color: #586961; font-size: 12px; vertical-align: middle; }
+.business-history-type { display: inline-flex; padding: 4px 7px; border-radius: 5px; color: #356e60; background: #edf5f0; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.business-history-outbound { color: #8c5d4c; background: #f8f0ec; }
+.business-history-move { color: #596a83; background: #eff2f7; }
+.business-history-split { color: #8a7546; background: #f7f3e9; }
+.business-history-initial { color: #596b62; background: #eef1ed; }
+.business-history-product, .business-history-location, .business-history-time, .business-history-actor { white-space: nowrap; }
+.business-history-product strong, .business-history-time strong, .business-history-actor strong { display: block; color: #2e4139; font-size: 12px; font-weight: 650; }
+.business-history-product small, .business-history-location small, .business-history-time small, .business-history-actor small { display: block; margin-top: 4px; color: #91a098; font-size: 10px; }
+.business-history-change { white-space: nowrap; }
+.business-history-location { line-height: 1.5; }
+.business-history-footer { display: flex; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid #edf0ed; color: #9aa69f; font-size: 10px; }
+
 @media (max-width: 760px) {
   .inventory-query-actions { flex-wrap: wrap; justify-content: flex-start; }
   .inventory-query-move-backdrop { padding: 12px; }
   .inventory-query-move-dialog { padding: 19px; }
   .inventory-query-move-actions { flex-direction: column-reverse; }
   .inventory-query-move-actions .button { width: 100%; }
+  .business-history-toolbar { padding: 13px; }
+  .business-history-type-filter { flex-wrap: nowrap; overflow-x: auto; }
+  .business-history-type-filter button { flex: 0 0 auto; }
+  .business-history-filters { align-items: stretch; flex-direction: column; }
+  .business-history-search, .business-history-source { width: 100%; }
+  .business-history-footer { padding: 11px 13px; font-size: 9px; }
 }

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import ProductCatalog from "@cangkuguanli/product-catalog";
 import InventoryQuery from "@cangkuguanli/inventory-query";
+import BusinessHistory from "@cangkuguanli/inventory-query/history";
 import EmployeeAccounts from "./EmployeeAccounts.jsx";
 
 const InitialInventoryImport = lazy(() => import("./InitialInventoryImport.jsx"));
@@ -242,6 +243,8 @@ export default function App() {
           <h1>{activePage}</h1>
           {activePage === "库存查询" ? (
             <InventoryQuery />
+          ) : activePage === "库存业务记录" ? (
+            <BusinessHistory />
           ) : activePage === "产品与货位" ? (
             <ProductCatalog />
           ) : activePage === "员工账号" ? (
