@@ -372,17 +372,6 @@ test("inventory operations, corrections, and imports replay once by submission i
   }, adminCookie, correctionKey);
   assert.equal(changedCorrection.status, 409);
 
-  const failedImportKey = randomUUID();
-  const malformedImport = await request("/api/admin/initial-inventory/imports", {
-    method: "POST",
-    headers: {
-      Cookie: adminCookie,
-      "Content-Type": "application/json",
-      "Idempotency-Key": failedImportKey,
-    },
-    body: "{",
-  });
-  assert.equal(malformedImport.status, 400);
   const importRow = {
     productName,
     spec: "6个一件",
@@ -397,15 +386,87 @@ test("inventory operations, corrections, and imports replay once by submission i
     cases: 1,
     loose: 3,
   };
-  const invalidImport = await postJson("/api/admin/initial-inventory/imports", {
+  const invalidImportKey = randomUUID();
+  const invalidImportPayload = {
     rows: [{ ...importRow, cases: -1 }],
-  }, adminCookie, failedImportKey);
+  };
+  const importBatchLogsBeforeFailure = await queryDatabase(
+    `SELECT count(*)::integer AS count
+       FROM system_operation_logs
+      WHERE operation_type = 'initial_inventory_import'
+        AND target_type = 'initial_inventory_import_batch'
+        AND actor_account_snapshot = $1`,
+    [adminAccount],
+  );
+  const invalidImport = await postJson("/api/admin/initial-inventory/imports", invalidImportPayload, adminCookie, invalidImportKey);
   assert.equal(invalidImport.status, 400);
+  const invalidImportResult = await invalidImport.json();
+  assert.match(invalidImportResult.batchId, /^\d+$/);
+  const failedImportBatchLogs = await queryDatabase(
+    `SELECT target_id::text AS batch_id, operation_content
+       FROM system_operation_logs
+      WHERE operation_type = 'initial_inventory_import'
+        AND target_type = 'initial_inventory_import_batch'
+        AND actor_account_snapshot = $1
+      ORDER BY id`,
+    [adminAccount],
+  );
+  assert.equal(
+    failedImportBatchLogs.rowCount,
+    importBatchLogsBeforeFailure.rows[0].count + 1,
+  );
+  assert.equal(failedImportBatchLogs.rows.at(-1).batch_id, invalidImportResult.batchId);
+  assert.deepEqual(failedImportBatchLogs.rows.at(-1).operation_content, {
+    batchId: invalidImportResult.batchId,
+    result: "failed",
+    receivedRows: 1,
+    importedRows: 0,
+    error: invalidImportResult.error,
+  });
+
+  const invalidImportReplay = await postJson(
+    "/api/admin/initial-inventory/imports",
+    invalidImportPayload,
+    adminCookie,
+    invalidImportKey,
+  );
+  assert.equal(invalidImportReplay.status, 400);
+  assert.deepEqual(await invalidImportReplay.json(), invalidImportResult);
+  const failedImportReplayLogs = await queryDatabase(
+    `SELECT target_id::text AS batch_id
+       FROM system_operation_logs
+      WHERE operation_type = 'initial_inventory_import'
+        AND target_type = 'initial_inventory_import_batch'
+        AND actor_account_snapshot = $1
+      ORDER BY id`,
+    [adminAccount],
+  );
+  assert.deepEqual(failedImportReplayLogs.rows, [{ batch_id: invalidImportResult.batchId }]);
+
+  const changedFailedImport = await postJson("/api/admin/initial-inventory/imports", {
+    rows: [importRow],
+  }, adminCookie, invalidImportKey);
+  assert.equal(changedFailedImport.status, 409);
+  assert.deepEqual((await queryDatabase(
+    `SELECT target_id::text AS batch_id
+       FROM system_operation_logs
+      WHERE operation_type = 'initial_inventory_import'
+        AND target_type = 'initial_inventory_import_batch'
+        AND actor_account_snapshot = $1
+      ORDER BY id`,
+    [adminAccount],
+  )).rows, [{ batch_id: invalidImportResult.batchId }]);
+
   const importRetry = await postJson("/api/admin/initial-inventory/imports", {
     rows: [importRow],
-  }, adminCookie, failedImportKey);
+  }, adminCookie, randomUUID());
   assert.equal(importRetry.status, 201);
   const retriedImportResult = await importRetry.json();
+  assert.deepEqual({ receivedRows: retriedImportResult.receivedRows, importedRows: retriedImportResult.importedRows }, {
+    receivedRows: 1,
+    importedRows: 1,
+  });
+  assert.notEqual(retriedImportResult.batchId, invalidImportResult.batchId);
 
   const importKey = randomUUID();
   const importPayload = { rows: [{ ...importRow, cases: 2, loose: 4 }] };

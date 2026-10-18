@@ -18,6 +18,10 @@
 .inventory-query-table { width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; }
 .inventory-query-table th { height: 42px; padding: 0 18px; color: #87958e; background: #fafbf9; font-size: 10px; font-weight: 600; white-space: nowrap; }
 .inventory-query-table td { padding: 13px 18px; border-top: 1px solid #eef1ee; color: #586961; font-size: 12px; vertical-align: middle; }
+.inventory-query-group-row th { height: auto; padding: 11px 18px 7px; border-top: 1px solid #e8eeea; color: #2e4139; background: #f8faf8; white-space: normal; }
+.inventory-query-group-row strong, .inventory-query-group-row small { display: block; }
+.inventory-query-group-row strong { font-size: 12px; font-weight: 650; }
+.inventory-query-group-row small { margin-top: 4px; color: #819087; font-size: 10px; font-weight: 400; }
 .inventory-query-product-toggle { display: grid; gap: 4px; max-width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; overflow-wrap: anywhere; }
 .inventory-query-product strong { display: block; color: #2e4139; font-size: 12px; font-weight: 650; }
 .inventory-query-product small { display: block; margin-top: 4px; color: #91a098; font-size: 10px; }
@@ -68,14 +72,15 @@
   .inventory-query-table { min-width: 0; }
   .inventory-query-table thead { display: none; }
   .inventory-query-table tbody { display: block; }
+  .inventory-query-group-row { display: block; padding: 0 13px; }
+  .inventory-query-group-row th { display: block; padding: 12px 2px 8px; border-top: 1px solid #e8eeea; text-align: left; }
   .inventory-query-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; padding: 8px 13px; border-top: 1px solid #edf0ed; }
   .inventory-query-row td { min-width: 0; padding: 7px 2px; border: 0; }
   .inventory-query-row td:nth-child(1) { grid-column: 1 / -1; }
   .inventory-query-row td:nth-child(2) { grid-column: 1; grid-row: 2; }
-  .inventory-query-row td:nth-child(3) { grid-column: 1; grid-row: 3; }
-  .inventory-query-row td:nth-child(4) { grid-column: 2; grid-row: 2; justify-self: end; }
-  .inventory-query-row td:nth-child(5) { grid-column: 2; grid-row: 3; justify-self: end; }
-  .inventory-query-row td:nth-child(6) { grid-column: 1 / -1; grid-row: 4; justify-self: end; }
+  .inventory-query-row td:nth-child(3) { grid-column: 2; grid-row: 2; justify-self: end; }
+  .inventory-query-row td:nth-child(4) { grid-column: 2; grid-row: 3; justify-self: end; }
+  .inventory-query-row td:nth-child(5) { grid-column: 1 / -1; grid-row: 4; justify-self: end; }
   .inventory-query-product-toggle { font-size: 13px; }
   .inventory-query-quantity { text-align: right; }
   .inventory-query-quantity strong { font-size: 14px; }

@@ -176,36 +176,27 @@ async function locationId(client, row, specId) {
   )).rows[0].id;
 }
 
-async function recordImportBatch(client, actor, batchId, result, receivedRows, importedRows, error = null) {
-  await client.query("BEGIN");
-  try {
-    await writeOperationLog(client, {
-      actor,
-      operationType: "initial_inventory_import",
-      targetType: "initial_inventory_import_batch",
-      targetId: batchId,
-      content: {
-        batchId,
-        result,
-        receivedRows,
-        importedRows,
-        ...(error ? { error } : {}),
-      },
-    });
-    await client.query("COMMIT");
-    return true;
-  } catch {
-    await client.query("ROLLBACK");
-    return false;
-  }
-}
-
-async function failedImportResponse(client, actor, batchId, receivedRows, message, status = 400) {
-  const logged = await recordImportBatch(client, actor, batchId, "failed", receivedRows, 0, message);
-  if (!logged) {
-    return NextResponse.json({ error: "初始库存提交失败，未登记。", batchId }, { status: 500 });
-  }
-  return invalidRequest(message, batchId, status);
+async function failedImportResponse(client, actor, claimId, batchId, receivedRows, message, status = 400) {
+  const responseBody = { error: message, batchId };
+  await writeOperationLog(client, {
+    actor,
+    operationType: "initial_inventory_import",
+    targetType: "initial_inventory_import_batch",
+    targetId: batchId,
+    content: {
+      batchId,
+      result: "failed",
+      receivedRows,
+      importedRows: 0,
+      error: message,
+    },
+  });
+  await completeIdempotency(client, claimId, status, responseBody);
+  await client.query("COMMIT");
+  return NextResponse.json(responseBody, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 export async function POST(request) {
@@ -254,39 +245,55 @@ export async function POST(request) {
     batchId = batchResult.rows[0].id;
 
     if (body === undefined) {
-      await client.query("ROLLBACK");
-      transactionOpen = false;
-      return await failedImportResponse(
+      const response = await failedImportResponse(
         client,
         actor,
+        claim.id,
         batchId,
         receivedRows,
         "请检查初始库存文件内容后重新上传。",
       );
+      transactionOpen = false;
+      return response;
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      await client.query("ROLLBACK");
-      transactionOpen = false;
-      return await failedImportResponse(
+      const response = await failedImportResponse(
         client,
         actor,
+        claim.id,
         batchId,
         receivedRows,
         "请检查初始库存行中的产品、包装规格、仓库、货位和数量。",
       );
+      transactionOpen = false;
+      return response;
     }
 
     receivedRows = Array.isArray(body.rows) ? body.rows.length : null;
     const prepared = prepareRows(body.rows);
     if (!prepared) {
-      await client.query("ROLLBACK");
+      const response = await failedImportResponse(
+        client,
+        actor,
+        claim.id,
+        batchId,
+        receivedRows,
+        "文件没有可提交的库存行。",
+      );
       transactionOpen = false;
-      return await failedImportResponse(client, actor, batchId, receivedRows, "文件没有可提交的库存行。");
+      return response;
     }
     if (prepared.error) {
-      await client.query("ROLLBACK");
+      const response = await failedImportResponse(
+        client,
+        actor,
+        claim.id,
+        batchId,
+        receivedRows,
+        prepared.error,
+      );
       transactionOpen = false;
-      return await failedImportResponse(client, actor, batchId, receivedRows, prepared.error);
+      return response;
     }
 
     const actualOccurredAt = new Date();
@@ -313,14 +320,31 @@ export async function POST(request) {
       if (!inventoryResult.rowCount) {
         await client.query("ROLLBACK");
         transactionOpen = false;
-        return await failedImportResponse(
+        await client.query("BEGIN");
+        transactionOpen = true;
+        const failureClaim = await claimIdempotency(client, {
+          actor,
+          scope: "admin/initial-inventory/imports",
+          key: idempotencyKey,
+          payload,
+        });
+        const failureReplay = idempotencyResponse(failureClaim);
+        if (failureReplay) {
+          await client.query("ROLLBACK");
+          transactionOpen = false;
+          return failureReplay;
+        }
+        const response = await failedImportResponse(
           client,
           actor,
+          failureClaim.id,
           batchId,
           receivedRows,
           "导入数量超出该货位可保存范围，整批未登记。",
           409,
         );
+        transactionOpen = false;
+        return response;
       }
 
       const transactionResult = await client.query(
@@ -377,15 +401,38 @@ export async function POST(request) {
       transactionOpen = false;
     }
     if (batchId) {
-      await recordImportBatch(
-        client,
-        actor,
-        batchId,
-        "failed",
-        receivedRows,
-        0,
-        "初始库存整批提交失败，未登记。请检查数据库连接后重试。",
-      );
+      try {
+        await client.query("BEGIN");
+        transactionOpen = true;
+        const failureClaim = await claimIdempotency(client, {
+          actor,
+          scope: "admin/initial-inventory/imports",
+          key: idempotencyKey,
+          payload,
+        });
+        const failureReplay = idempotencyResponse(failureClaim);
+        if (failureReplay) {
+          await client.query("ROLLBACK");
+          transactionOpen = false;
+          return failureReplay;
+        }
+        const response = await failedImportResponse(
+          client,
+          actor,
+          failureClaim.id,
+          batchId,
+          receivedRows,
+          "初始库存整批提交失败，未登记。请检查数据库连接后重试。",
+          500,
+        );
+        transactionOpen = false;
+        return response;
+      } catch {
+        if (transactionOpen) {
+          await client.query("ROLLBACK");
+          transactionOpen = false;
+        }
+      }
     }
     return NextResponse.json({
       error: "初始库存整批提交失败，未登记。请检查数据库连接后重试。",
