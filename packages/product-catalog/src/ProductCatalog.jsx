@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { groupProductsByIdentity } from "./identityGroups.js";
 import "./catalog.css";
 
 export default function ProductCatalog() {
@@ -88,13 +89,7 @@ export default function ProductCatalog() {
   }
 
   const productOptions = [...new Map(products.map((product) => [product.id, product])).values()];
-  const productGroups = new Map();
-  for (const product of products) {
-    const identity = [product.name ?? "", product.spec ?? "", product.material ?? "", product.color ?? ""];
-    const key = JSON.stringify(identity);
-    if (!productGroups.has(key)) productGroups.set(key, { key, rows: [] });
-    productGroups.get(key).rows.push(product);
-  }
+  const productGroups = groupProductsByIdentity(products);
 
   return (
     <section className="catalog-panel" aria-label="共用产品规格">
@@ -144,14 +139,14 @@ export default function ProductCatalog() {
               </tr>
             </thead>
             <tbody>
-              {[...productGroups.values()].map((group) => group.rows.map((product, index) => (
+              {productGroups.map((group) => group.products.map((product, index) => (
                 <tr key={product.locationId}>
                   {index === 0 && (
                     <>
-                      <td rowSpan={group.rows.length}><strong>{product.name}</strong></td>
-                      <td rowSpan={group.rows.length}>{product.spec}</td>
-                      <td rowSpan={group.rows.length}>{product.material}</td>
-                      <td rowSpan={group.rows.length}>{product.color}</td>
+                      <td rowSpan={group.products.length}><strong>{product.name}</strong></td>
+                      <td rowSpan={group.products.length}>{product.spec}</td>
+                      <td rowSpan={group.products.length}>{product.material}</td>
+                      <td rowSpan={group.products.length}>{product.color}</td>
                     </>
                   )}
                   <td>{product.category}</td>

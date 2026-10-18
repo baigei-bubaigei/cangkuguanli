@@ -1,20 +1,20 @@
-export function groupInventoryProducts(products) {
+export function groupProductsByIdentity(products) {
   const groups = new Map();
   for (const product of products) {
     const identity = [product.name, product.spec, product.material, product.color]
       .map((value) => value ?? "");
-    const key = JSON.stringify(identity);
-    let group = groups.get(key);
+    const id = JSON.stringify(identity);
+    let group = groups.get(id);
     if (!group) {
       group = {
-        id: key,
+        id,
         name: identity[0],
         spec: identity[1],
         material: identity[2],
         color: identity[3],
         products: [],
       };
-      groups.set(key, group);
+      groups.set(id, group);
     }
     group.products.push(product);
   }

@@ -225,6 +225,34 @@ export async function POST(request) {
   let batchId;
   let receivedRows = null;
   let transactionOpen = false;
+  async function failedImportAfterRollback(message, status) {
+    await client.query("BEGIN");
+    transactionOpen = true;
+    const failureClaim = await claimIdempotency(client, {
+      actor,
+      scope: "admin/initial-inventory/imports",
+      key: idempotencyKey,
+      payload,
+    });
+    const failureReplay = idempotencyResponse(failureClaim);
+    if (failureReplay) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
+      return failureReplay;
+    }
+    const response = await failedImportResponse(
+      client,
+      actor,
+      failureClaim.id,
+      batchId,
+      receivedRows,
+      message,
+      status,
+    );
+    transactionOpen = false;
+    return response;
+  }
+
   try {
     await client.query("BEGIN");
     transactionOpen = true;
@@ -320,31 +348,10 @@ export async function POST(request) {
       if (!inventoryResult.rowCount) {
         await client.query("ROLLBACK");
         transactionOpen = false;
-        await client.query("BEGIN");
-        transactionOpen = true;
-        const failureClaim = await claimIdempotency(client, {
-          actor,
-          scope: "admin/initial-inventory/imports",
-          key: idempotencyKey,
-          payload,
-        });
-        const failureReplay = idempotencyResponse(failureClaim);
-        if (failureReplay) {
-          await client.query("ROLLBACK");
-          transactionOpen = false;
-          return failureReplay;
-        }
-        const response = await failedImportResponse(
-          client,
-          actor,
-          failureClaim.id,
-          batchId,
-          receivedRows,
+        return await failedImportAfterRollback(
           "导入数量超出该货位可保存范围，整批未登记。",
           409,
         );
-        transactionOpen = false;
-        return response;
       }
 
       const transactionResult = await client.query(
@@ -402,31 +409,10 @@ export async function POST(request) {
     }
     if (batchId) {
       try {
-        await client.query("BEGIN");
-        transactionOpen = true;
-        const failureClaim = await claimIdempotency(client, {
-          actor,
-          scope: "admin/initial-inventory/imports",
-          key: idempotencyKey,
-          payload,
-        });
-        const failureReplay = idempotencyResponse(failureClaim);
-        if (failureReplay) {
-          await client.query("ROLLBACK");
-          transactionOpen = false;
-          return failureReplay;
-        }
-        const response = await failedImportResponse(
-          client,
-          actor,
-          failureClaim.id,
-          batchId,
-          receivedRows,
+        return await failedImportAfterRollback(
           "初始库存整批提交失败，未登记。请检查数据库连接后重试。",
           500,
         );
-        transactionOpen = false;
-        return response;
       } catch {
         if (transactionOpen) {
           await client.query("ROLLBACK");

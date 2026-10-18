@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useState } from "react";
+import { groupProductsByIdentity } from "@cangkuguanli/product-catalog/identity-groups";
 import InboundForm from "./InboundForm.jsx";
 import MoveForm from "./MoveForm.jsx";
 import OutboundForm from "./OutboundForm.jsx";
 import SplitForm from "./SplitForm.jsx";
-import { groupInventoryProducts } from "./inventoryGroups.js";
 import "./inventory-query.css";
 
 export default function InventoryQuery() {
@@ -49,7 +49,7 @@ export default function InventoryQuery() {
     ];
     return searchableText.some((value) => String(value ?? "").toLowerCase().includes(searchTerm));
   });
-  const productGroups = groupInventoryProducts(products);
+  const productGroups = groupProductsByIdentity(products);
 
   return (
     <section className="inventory-query" aria-label="共享库存查询">

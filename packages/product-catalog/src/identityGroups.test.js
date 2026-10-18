@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { groupInventoryProducts } from "./inventoryGroups.js";
+import { groupProductsByIdentity } from "./identityGroups.js";
 
 test("groups packages by product identity without combining their stock or locations", () => {
   const products = [
@@ -50,7 +50,7 @@ test("groups packages by product identity without combining their stock or locat
     },
   ];
 
-  const groups = groupInventoryProducts(products);
+  const groups = groupProductsByIdentity(products);
 
   assert.equal(groups.length, 3);
   assert.deepEqual(groups.map(({ name, spec, material, color, products: packages }) => ({
@@ -106,7 +106,7 @@ test("groups packages by product identity without combining their stock or locat
 });
 
 test("treats empty identity fields as equal when grouping packages", () => {
-  const groups = groupInventoryProducts([
+  const groups = groupProductsByIdentity([
     { id: "empty", name: "", spec: "", material: "", color: "", perCase: 2, locations: [] },
     { id: "nullable", name: "", spec: "", material: null, color: null, perCase: 4, locations: [] },
   ]);

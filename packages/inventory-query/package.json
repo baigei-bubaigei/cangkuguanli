@@ -10,5 +10,8 @@
   },
   "peerDependencies": {
     "react": "19.3.0"
+  },
+  "dependencies": {
+    "@cangkuguanli/product-catalog": "0.1.0"
   }
 }
