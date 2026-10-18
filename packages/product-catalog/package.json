@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./src/ProductCatalog.jsx",
+  "exports": {
+    ".": "./src/ProductCatalog.jsx",
+    "./identity-groups": "./src/identityGroups.js"
+  },
   "peerDependencies": {
     "react": "19.3.0"
   }

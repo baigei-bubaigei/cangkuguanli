@@ -1,0 +1,35 @@
+.system-operation-logs { margin-top: 22px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.system-operation-logs__header { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+.system-operation-logs__header h2 { margin: 0; color: #26362f; font-size: 18px; font-weight: 650; letter-spacing: -.025em; }
+.system-operation-logs__header p:last-child { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.system-operation-logs__eyebrow { margin: 0 0 7px; color: #658172; font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.system-operation-logs__filters { display: flex; justify-content: flex-end; gap: 10px; }
+.system-operation-logs__filters label { display: grid; gap: 6px; min-width: 150px; color: #52645b; font-size: 11px; font-weight: 650; }
+.system-operation-logs__filters .system-operation-logs__search { width: min(270px, 25vw); }
+.system-operation-logs__filters input, .system-operation-logs__filters select { width: 100%; min-width: 0; min-height: 39px; padding: 0 10px; border: 1px solid #dce4df; border-radius: 6px; outline: none; color: #26362f; background: #fff; font: inherit; font-weight: 400; }
+.system-operation-logs__filters input:focus, .system-operation-logs__filters select:focus { border-color: #6a9c82; box-shadow: 0 0 0 3px #e4f1e9; }
+.system-operation-logs__state { display: flex; min-height: 150px; align-items: center; justify-content: center; padding: 24px; color: var(--muted); font-size: 13px; text-align: center; }
+.system-operation-logs__error { color: #a14343; }
+.system-operation-logs__table-wrap { width: 100%; overflow-x: auto; }
+.system-operation-logs__table { width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; }
+.system-operation-logs__table th { height: 42px; padding: 0 18px; color: #87958e; background: #fafbf9; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.system-operation-logs__table td { padding: 13px 18px; border-top: 1px solid #eef1ee; color: #586961; font-size: 12px; vertical-align: middle; }
+.system-operation-logs__table td strong, .system-operation-logs__table td small { display: block; }
+.system-operation-logs__table td strong { color: #2e4139; font-size: 12px; font-weight: 650; }
+.system-operation-logs__table td small { margin-top: 4px; color: #829188; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.system-operation-logs__table td time { white-space: nowrap; }
+.system-operation-logs__footer { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid #edf0ed; color: #9aa69f; font-size: 10px; }
+
+@media (max-width: 760px) {
+  .system-operation-logs__header { align-items: stretch; flex-direction: column; gap: 16px; padding: 17px 14px; }
+  .system-operation-logs__filters { align-items: stretch; flex-direction: column; }
+  .system-operation-logs__filters label, .system-operation-logs__filters .system-operation-logs__search { width: 100%; min-width: 0; }
+  .system-operation-logs__table { min-width: 0; }
+  .system-operation-logs__table thead { display: none; }
+  .system-operation-logs__table tbody { display: block; }
+  .system-operation-logs__table tr { display: grid; padding: 8px 13px; border-top: 1px solid #edf0ed; }
+  .system-operation-logs__table td { display: grid; grid-template-columns: 94px minmax(0, 1fr); gap: 8px; min-width: 0; padding: 6px 2px; border: 0; overflow-wrap: anywhere; }
+  .system-operation-logs__table td::before { content: attr(data-label); color: #87958e; font-size: 10px; }
+  .system-operation-logs__table td time { white-space: normal; }
+  .system-operation-logs__footer { padding: 11px 13px; }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { groupProductsByIdentity } from "./identityGroups.js";
 import "./catalog.css";
 
 export default function ProductCatalog() {
@@ -88,6 +89,7 @@ export default function ProductCatalog() {
   }
 
   const productOptions = [...new Map(products.map((product) => [product.id, product])).values()];
+  const productGroups = groupProductsByIdentity(products);
 
   return (
     <section className="catalog-panel" aria-label="共用产品规格">
@@ -125,9 +127,11 @@ export default function ProductCatalog() {
             <thead>
               <tr>
                 <th>产品名称</th>
+                <th>规格</th>
+                <th>材质</th>
+                <th>颜色</th>
                 <th>商品类别</th>
                 <th>类别名称</th>
-                <th>规格</th>
                 <th>每件个数</th>
                 <th>备注</th>
                 <th>仓库</th>
@@ -135,18 +139,24 @@ export default function ProductCatalog() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {productGroups.map((group) => group.products.map((product, index) => (
                 <tr key={product.locationId}>
-                  <td><strong>{product.name}</strong></td>
+                  {index === 0 && (
+                    <>
+                      <td rowSpan={group.products.length}><strong>{product.name}</strong></td>
+                      <td rowSpan={group.products.length}>{product.spec}</td>
+                      <td rowSpan={group.products.length}>{product.material}</td>
+                      <td rowSpan={group.products.length}>{product.color}</td>
+                    </>
+                  )}
                   <td>{product.category}</td>
                   <td>{product.categoryName}</td>
-                  <td>{product.spec}</td>
                   <td>{product.perCase} 个 / 件</td>
                   <td>{product.note}</td>
                   <td>{product.warehouse}</td>
                   <td>{product.spot}</td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
@@ -172,11 +182,19 @@ export default function ProductCatalog() {
               <div className="catalog-form-grid">
                 <label className="catalog-field">
                   <span>产品名称</span>
-                  <input name="name" type="text" autoComplete="off" required />
+                  <input name="name" type="text" autoComplete="off" />
                 </label>
                 <label className="catalog-field">
                   <span>规格名称</span>
-                  <input name="spec" type="text" autoComplete="off" required />
+                  <input name="spec" type="text" autoComplete="off" />
+                </label>
+                <label className="catalog-field">
+                  <span>材质</span>
+                  <input name="material" type="text" autoComplete="off" />
+                </label>
+                <label className="catalog-field">
+                  <span>颜色</span>
+                  <input name="color" type="text" autoComplete="off" />
                 </label>
                 <label className="catalog-field">
                   <span>商品类别</span>
@@ -243,7 +261,7 @@ export default function ProductCatalog() {
                   <span>产品规格</span>
                   <select name="productSpecId" defaultValue={productOptions[0]?.id || ""} required>
                     {productOptions.map((product) => (
-                      <option key={product.id} value={product.id}>{product.name} · {product.spec}</option>
+                      <option key={product.id} value={product.id}>{product.name || "未填写产品名"} · {product.spec || "未填写规格"} · {product.material || "未填写材质"} · {product.color || "未填写颜色"} · 每件 {product.perCase} 个</option>
                     ))}
                   </select>
                 </label>

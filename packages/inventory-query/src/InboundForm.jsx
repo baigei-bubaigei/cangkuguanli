@@ -1,9 +1,7 @@
-import { useState } from "react";
-
-function localDateTimeNow() {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
+import { useRef, useState } from "react";
+import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
+import { productOptionLabel } from "./productOptionLabel.js";
+import { localDateTimeNow } from "./dateTime.js";
 
 export default function InboundForm({ products, initialProductId, initialLocationId, onClose, onSaved }) {
   const initialProduct = products.find((product) => product.id === initialProductId) ?? products[0];
@@ -16,8 +14,10 @@ export default function InboundForm({ products, initialProductId, initialLocatio
   const [cases, setCases] = useState("0");
   const [loose, setLoose] = useState("0");
   const [actualOccurredAt, setActualOccurredAt] = useState(localDateTimeNow);
+  const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const submissionRef = useRef(null);
   const selectedProduct = products.find((product) => product.id === productSpecId);
 
   function handleProductChange(event) {
@@ -42,23 +42,26 @@ export default function InboundForm({ products, initialProductId, initialLocatio
 
     setPending(true);
     try {
-      const response = await fetch("/api/inventory/inbound", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productSpecId,
-          locationId,
-          cases: caseCount,
-          loose: looseCount,
-          actualOccurredAt: new Date(actualOccurredAt).toISOString(),
-        }),
-      });
+      const payload = {
+        productSpecId,
+        locationId,
+        cases: caseCount,
+        loose: looseCount,
+        actualOccurredAt: new Date(actualOccurredAt).toISOString(),
+        note,
+      };
+      const response = await fetch("/api/inventory/inbound", inventoryMutationOptions(
+        submissionRef,
+        "/api/inventory/inbound",
+        payload,
+      ));
       const result = await response.json();
       if (!response.ok) {
         setError(result.error || "入库未完成，请检查资料后重试。");
         return;
       }
 
+      completeInventoryMutation(submissionRef);
       await onSaved();
     } catch {
       setError("入库未完成，当前输入已保留，请检查网络后重试。");
@@ -83,7 +86,7 @@ export default function InboundForm({ products, initialProductId, initialLocatio
             <span>产品规格</span>
             <select value={productSpecId} onChange={handleProductChange} required>
               {products.map((product) => (
-                <option key={product.id} value={product.id}>{product.name} · {product.spec}</option>
+                <option key={product.id} value={product.id}>{productOptionLabel(product)}</option>
               ))}
             </select>
           </label>
@@ -109,6 +112,10 @@ export default function InboundForm({ products, initialProductId, initialLocatio
           <label>
             <span>实际发生时间</span>
             <input type="datetime-local" value={actualOccurredAt} onChange={(event) => setActualOccurredAt(event.target.value)} required />
+          </label>
+          <label>
+            <span>备注（选填）</span>
+            <input type="text" value={note} onChange={(event) => setNote(event.target.value)} />
           </label>
           {error && <p className="inventory-query-inbound-error" role="alert">{error}</p>}
           <div className="inventory-query-inbound-actions">

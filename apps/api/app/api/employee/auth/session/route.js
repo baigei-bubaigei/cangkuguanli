@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  currentEmployee,
+  currentEmployeeSession,
   employeeSessionCookie,
   logoutEmployee,
 } from "../../../../../src/auth/employee-auth.js";
@@ -26,7 +26,7 @@ export async function GET(request) {
     });
   }
 
-  const employee = await currentEmployee(token);
+  const employee = await currentEmployeeSession(token);
   if (!employee) {
     const response = NextResponse.json({ error: "需要重新登录。" }, {
       status: 401,
