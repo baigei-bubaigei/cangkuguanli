@@ -5,6 +5,15 @@ export function requestIdempotencyKey(request) {
   const key = request.headers.get("Idempotency-Key");
   return key && key.length <= 255 && key.trim() === key ? key : null;
 }
+export async function readIdempotencyPayload(request) {
+  const rawBody = await request.text();
+  try {
+    const body = JSON.parse(rawBody);
+    return { body, payload: body };
+  } catch {
+    return { body: undefined, payload: { unparsedJson: rawBody } };
+  }
+}
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return value.map(canonicalJson);

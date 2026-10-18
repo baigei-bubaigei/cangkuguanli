@@ -476,7 +476,16 @@ test("inventory operations, corrections, and imports replay once by submission i
       WHERE tx.product_spec_id = $1`,
     [product.id],
   );
-  assert.equal(operationLogCount.rows[0].count, 9);
+  assert.equal(operationLogCount.rows[0].count, 10);
+
+  const correctionLogCount = await queryDatabase(
+    `SELECT count(*)::integer AS count
+       FROM system_operation_logs
+      WHERE operation_type = 'inventory_history_corrected'
+        AND target_type = 'inventory_transaction' AND target_id = $1`,
+    [inboundResult.transactionId],
+  );
+  assert.equal(correctionLogCount.rows[0].count, 1);
 
   for (const batchId of [retriedImportResult.batchId, importResult.batchId]) {
     const batchLogCount = await queryDatabase(

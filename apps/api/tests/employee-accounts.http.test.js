@@ -95,7 +95,7 @@ async function queryDatabase(sql, values = []) {
   }
 }
 
-async function logsForEmployee(employeeId) {
+async function logsForEmployee(employeeId, operationType) {
   return queryDatabase(
     `SELECT source_system, operation_type, target_type, target_id::text AS target_id,
             actor_admin_account_id::text AS actor_admin_account_id,
@@ -103,8 +103,9 @@ async function logsForEmployee(employeeId) {
             actor_account_snapshot, actor_display_name_snapshot, operation_content, recorded_at
        FROM system_operation_logs
       WHERE target_type = 'employee_account' AND target_id = $1
+        AND ($2::TEXT IS NULL OR operation_type = $2)
       ORDER BY id`,
-    [employeeId],
+    [employeeId, operationType ?? null],
   );
 }
 
@@ -286,7 +287,7 @@ test("only administrators can create and list persisted employee accounts", asyn
   assert.equal(listed.status, "active");
   assert.equal(Object.hasOwn(listed, "passwordHash"), false);
   assert.equal(Object.hasOwn(listed, "temporaryPassword"), false);
-  const employeeLogs = await logsForEmployee(created.employee.id);
+  const employeeLogs = await logsForEmployee(created.employee.id, "employee_account_created");
   const adminIdentity = await queryDatabase(
     "SELECT id::text AS id FROM admin_accounts WHERE account = $1",
     [adminAccount],
@@ -404,7 +405,7 @@ test("administrators can enable and disable employee accounts, including existin
   const employee = (await initialList.json()).find((item) => item.account === existingEmployeeAccount);
   assert.ok(employee, "the employee should be available from the administrator list");
   assert.equal(employee.status, "active");
-  assert.equal((await logsForEmployee(employee.id)).rowCount, 0);
+  assert.equal((await logsForEmployee(employee.id, "employee_account_status_changed")).rowCount, 0);
 
   const togglePath = `/api/admin/employees/${employee.id}`;
   const employeeToggle = await request(togglePath, {
@@ -462,7 +463,7 @@ test("administrators can enable and disable employee accounts, including existin
     [employee.id],
   );
   assert.equal(statusAfterFailedLog.rows[0].status, "active");
-  assert.equal((await logsForEmployee(employee.id)).rowCount, 0);
+  assert.equal((await logsForEmployee(employee.id, "employee_account_status_changed")).rowCount, 0);
   await queryDatabase("DROP TRIGGER issue30_reject_employee_status_log ON system_operation_logs");
   await queryDatabase("DROP FUNCTION issue30_reject_employee_status_log()");
 
@@ -473,7 +474,7 @@ test("administrators can enable and disable employee accounts, including existin
   });
   assert.equal(disabledResponse.status, 200);
   assert.equal((await disabledResponse.json()).status, "disabled");
-  const disabledLogs = await logsForEmployee(employee.id);
+  const disabledLogs = await logsForEmployee(employee.id, "employee_account_status_changed");
   const adminIdentity = await queryDatabase(
     "SELECT id::text AS id FROM admin_accounts WHERE account = $1",
     [adminAccount],
@@ -537,7 +538,7 @@ test("administrators can enable and disable employee accounts, including existin
   });
   assert.equal(enabledResponse.status, 200);
   assert.equal((await enabledResponse.json()).status, "active");
-  const statusLogs = await logsForEmployee(employee.id);
+  const statusLogs = await logsForEmployee(employee.id, "employee_account_status_changed");
   assert.equal(statusLogs.rowCount, 2);
   assert.deepEqual(statusLogs.rows.map(({ operation_content: content }) => ({
     beforeStatus: content.beforeStatus,

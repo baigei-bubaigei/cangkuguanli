@@ -1,11 +1,7 @@
 import { useRef, useState } from "react";
 import { completeInventoryMutation, inventoryMutationOptions } from "./submission.js";
 import { productOptionLabel } from "./productOptionLabel.js";
-
-function localDateTimeNow() {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
+import { localDateTimeNow } from "./dateTime.js";
 
 export default function InboundForm({ products, initialProductId, initialLocationId, onClose, onSaved }) {
   const initialProduct = products.find((product) => product.id === initialProductId) ?? products[0];

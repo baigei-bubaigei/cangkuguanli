@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import "./system-operation-logs.css";
 
 const operationLabels = {
+  login: "登录",
+  logout: "退出",
+  inventory_history_corrected: "更正业务记录",
   employee_account_created: "创建员工账号",
   employee_account_status_changed: "修改员工状态",
   product_spec_created: "新增产品规格",
@@ -14,6 +17,7 @@ const operationLabels = {
 };
 
 const contentLabels = {
+  action: "操作",
   account: "账号",
   batchId: "批次",
   cases: "整件",

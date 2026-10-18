@@ -133,6 +133,10 @@ after(async () => {
   }
   if (pool) {
     await pool.query(
+      "DELETE FROM system_operation_logs WHERE actor_account_snapshot = ANY($1::text[])",
+      [[adminAccount, activeEmployee, disabledEmployee, credentiallessEmployee].filter(Boolean)],
+    );
+    await pool.query(
       "DELETE FROM admin_accounts WHERE account = $1",
       [adminAccount],
     );
@@ -181,6 +185,35 @@ test("an existing employee can log in, retain identity after refresh, and log ou
     headers: { Cookie: cookie },
   });
   assert.equal(afterLogout.status, 401);
+
+  const logs = await pool.query(
+    `SELECT operation_type, source_system, target_type, target_id::TEXT AS target_id,
+            operation_content
+       FROM system_operation_logs
+      WHERE actor_account_snapshot = $1
+      ORDER BY id`,
+    [activeEmployee],
+  );
+  assert.deepEqual(logs.rows.map(({ operation_type, source_system, target_type, operation_content }) => ({
+    operationType: operation_type,
+    sourceSystem: source_system,
+    targetType: target_type,
+    content: operation_content,
+  })), [
+    {
+      operationType: "login",
+      sourceSystem: "employee",
+      targetType: "employee_account",
+      content: { action: "登录" },
+    },
+    {
+      operationType: "logout",
+      sourceSystem: "employee",
+      targetType: "employee_account",
+      content: { action: "退出" },
+    },
+  ]);
+  assert.equal(logs.rows[0].target_id, logs.rows[1].target_id);
 });
 
 test("employee and administrator sessions cannot cross the independent system boundary", async () => {
@@ -291,4 +324,12 @@ test("wrong passwords and disabled employee accounts cannot log in", async () =>
   const credentialless = await login("employee", credentiallessEmployee, "any-password");
   assert.equal(credentialless.status, 401);
   assert.equal(credentialless.headers.has("set-cookie"), false);
+
+  const failedAccountLogs = await pool.query(
+    `SELECT operation_type FROM system_operation_logs
+      WHERE actor_account_snapshot = ANY($1::TEXT[])
+      ORDER BY id`,
+    [[disabledEmployee, credentiallessEmployee]],
+  );
+  assert.deepEqual(failedAccountLogs.rows, []);
 });

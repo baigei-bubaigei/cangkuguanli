@@ -99,6 +99,17 @@ function requestCorrection(transactionId, correction, cookie, sourceSystem) {
   });
 }
 
+async function correctionLogs(transactionId) {
+  return pool.query(
+    `SELECT operation_type, source_system, actor_account_snapshot, operation_content
+       FROM system_operation_logs
+      WHERE target_type = 'inventory_transaction' AND target_id = $1
+        AND operation_type = 'inventory_history_corrected'
+      ORDER BY id`,
+    [transactionId],
+  );
+}
+
 function requestInventory(cookie) {
   return request("/api/inventory", { headers: { Cookie: cookie } });
 }
@@ -675,4 +686,64 @@ test("admin and employee can correct supported inventory entries without losing 
   assert.equal(finalProduct.locations.find((location) => location.id === createdProduct.locationId).cases,
     concurrentWinner.cases === 1 ? 0 : 2);
   assert.equal(concurrentWinner.actor.account, adminAccount);
+
+  for (const [transactionId, actorAccount, sourceSystem] of [
+    [inbound.transactionId, employeeAccount, "employee"],
+    [outbound.transactionId, adminAccount, "admin"],
+    [move.transactionId, adminAccount, "admin"],
+    [split.transactionId, adminAccount, "admin"],
+  ]) {
+    const logs = await correctionLogs(transactionId);
+    assert.deepEqual(logs.rows, [{
+      operation_type: "inventory_history_corrected",
+      source_system: sourceSystem,
+      actor_account_snapshot: actorAccount,
+      operation_content: { action: "更正业务记录" },
+    }]);
+  }
+
+  const concurrentCorrectionLogs = await correctionLogs(additionalInbound.transactionId);
+  assert.equal(concurrentCorrectionLogs.rowCount, 1);
+  assert.equal(concurrentCorrectionLogs.rows[0].operation_type, "inventory_history_corrected");
+  assert.equal(concurrentCorrectionLogs.rows[0].source_system, concurrentWinner.corrections[0].sourceSystem);
+  assert.equal(concurrentCorrectionLogs.rows[0].actor_account_snapshot, concurrentWinner.corrections[0].actor.account);
+
+  await pool.query(`
+    CREATE FUNCTION issue22_reject_history_correction_log() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $body$
+    BEGIN
+      IF NEW.operation_type = 'inventory_history_corrected' THEN
+        RAISE EXCEPTION 'simulated operation log write failure';
+      END IF;
+      RETURN NEW;
+    END;
+    $body$
+  `);
+  await pool.query(`
+    CREATE TRIGGER issue22_reject_history_correction_log
+      BEFORE INSERT ON system_operation_logs
+      FOR EACH ROW EXECUTE FUNCTION issue22_reject_history_correction_log()
+  `);
+  try {
+    const rolledBackCorrection = await requestCorrection(additionalInbound.transactionId, {
+      expectedRevision: concurrentWinner.revisionId,
+      note: "日志写入失败时不能保存的更正",
+    }, adminCookie);
+    assert.equal(rolledBackCorrection.status, 500);
+
+    const historyAfterRollbackResponse = await requestHistory(adminCookie);
+    assert.equal(historyAfterRollbackResponse.status, 200);
+    const historyAfterRollback = await historyAfterRollbackResponse.json();
+    const transactionAfterRollback = historyAfterRollback.records.find(
+      (record) => record.id === additionalInbound.transactionId,
+    );
+    assert.equal(transactionAfterRollback.note, concurrentWinner.note);
+    assert.equal(transactionAfterRollback.corrections.length, 1);
+
+    const logsAfterRollback = await correctionLogs(additionalInbound.transactionId);
+    assert.equal(logsAfterRollback.rowCount, 1);
+  } finally {
+    await pool.query("DROP TRIGGER issue22_reject_history_correction_log ON system_operation_logs");
+    await pool.query("DROP FUNCTION issue22_reject_history_correction_log()");
+  }
 });

@@ -240,7 +240,7 @@ test("administrators can filter both systems' operation logs by source, operator
   assert.equal(defaultResponse.status, 200);
   assert.equal(defaultResponse.headers.get("cache-control"), "no-store");
   const defaultBody = await defaultResponse.json();
-  assert.equal(defaultBody.records.length, 4);
+  assert.equal(defaultBody.records.length, 5);
   assert.deepEqual(new Set(defaultBody.records.map((record) => record.sourceSystem)), new Set(["admin", "employee"]));
   assert.deepEqual(
     new Set(defaultBody.actors.map((actor) => actor.account)),
@@ -254,7 +254,7 @@ test("administrators can filter both systems' operation logs by source, operator
   const employeeSource = await apiGet("/api/admin/system-logs?source=employee", adminCookie);
   assert.deepEqual((await employeeSource.json()).records.map((record) => record.sourceSystem), ["employee", "employee"]);
   const adminSource = await apiGet("/api/admin/system-logs?source=admin", adminCookie);
-  assert.deepEqual((await adminSource.json()).records.map((record) => record.sourceSystem), ["admin", "admin"]);
+  assert.deepEqual((await adminSource.json()).records.map((record) => record.sourceSystem), ["admin", "admin", "admin"]);
 
   const filters = new URLSearchParams({
     source: "employee",
@@ -289,7 +289,7 @@ test("employee log endpoint remains employee-only even when a request asks for a
   const response = await apiGet("/api/employee/system-logs?source=admin", employeeCookie);
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.records.length, 2);
+  assert.equal(body.records.length, 3);
   assert.deepEqual(new Set(body.records.map((record) => record.sourceSystem)), new Set(["employee"]));
   assert.deepEqual(new Set(body.actors.map((actor) => actor.account)), new Set(employees.map((actor) => actor.account)));
 

@@ -111,6 +111,10 @@ after(async () => {
   if (pool) {
     if (activeAccount || disabledAccount) {
       await pool.query(
+        "DELETE FROM system_operation_logs WHERE actor_account_snapshot = ANY($1::text[])",
+        [[activeAccount, disabledAccount].filter(Boolean)],
+      );
+      await pool.query(
         "DELETE FROM admin_accounts WHERE account = ANY($1::text[])",
         [[activeAccount, disabledAccount].filter(Boolean)],
       );
@@ -156,6 +160,35 @@ test("an existing administrator can log in, keep the session after refresh, and 
     headers: { Cookie: cookie },
   });
   assert.equal(afterLogout.status, 401);
+
+  const logs = await pool.query(
+    `SELECT operation_type, source_system, target_type, target_id::TEXT AS target_id,
+            operation_content
+       FROM system_operation_logs
+      WHERE actor_account_snapshot = $1
+      ORDER BY id`,
+    [activeAccount],
+  );
+  assert.deepEqual(logs.rows.map(({ operation_type, source_system, target_type, operation_content }) => ({
+    operationType: operation_type,
+    sourceSystem: source_system,
+    targetType: target_type,
+    content: operation_content,
+  })), [
+    {
+      operationType: "login",
+      sourceSystem: "admin",
+      targetType: "admin_account",
+      content: { action: "登录" },
+    },
+    {
+      operationType: "logout",
+      sourceSystem: "admin",
+      targetType: "admin_account",
+      content: { action: "退出" },
+    },
+  ]);
+  assert.equal(logs.rows[0].target_id, logs.rows[1].target_id);
 });
 
 test("wrong passwords and disabled administrator accounts cannot log in", async () => {
@@ -165,4 +198,12 @@ test("wrong passwords and disabled administrator accounts cannot log in", async 
   const disabled = await login(disabledAccount, disabledPassword);
   assert.equal(disabled.status, 401);
   assert.equal(disabled.headers.has("set-cookie"), false);
+
+  const failedAccountLogs = await pool.query(
+    `SELECT operation_type FROM system_operation_logs
+      WHERE actor_account_snapshot = ANY($1::TEXT[])
+      ORDER BY id`,
+    [[activeAccount, disabledAccount]],
+  );
+  assert.deepEqual(failedAccountLogs.rows.map((row) => row.operation_type), ["login", "logout"]);
 });

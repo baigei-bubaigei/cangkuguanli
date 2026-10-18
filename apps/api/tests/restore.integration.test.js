@@ -379,7 +379,7 @@ async function login(system, account, password) {
   return setCookie.split(";", 1)[0];
 }
 
-async function assertSystemsCanUseRestoredDatabase() {
+async function assertSystemsCanUseRestoredDatabase(expectedAdminSources, expectedEmployeeSources) {
   const adminCookie = await login("admin", adminAccount, adminPassword);
   const employeeCookie = await login("employee", employeeAccount, employeePassword);
   const [adminInventoryResponse, employeeInventoryResponse, adminCatalogResponse, employeeCatalogResponse] = await Promise.all([
@@ -420,8 +420,8 @@ async function assertSystemsCanUseRestoredDatabase() {
   assert.equal(adminLogsResponse.status, 200);
   assert.equal(employeeLogsResponse.status, 200);
   const [adminLogs, employeeLogs] = await Promise.all([adminLogsResponse.json(), employeeLogsResponse.json()]);
-  assert.deepEqual(adminLogs.records.map(({ sourceSystem }) => sourceSystem).sort(), ["admin", "employee"]);
-  assert.deepEqual(employeeLogs.records.map(({ sourceSystem }) => sourceSystem), ["employee"]);
+  assert.deepEqual(adminLogs.records.map(({ sourceSystem }) => sourceSystem).sort(), expectedAdminSources);
+  assert.deepEqual(employeeLogs.records.map(({ sourceSystem }) => sourceSystem), expectedEmployeeSources);
 
   const historyResponse = await fetch(`${baseUrl}/api/inventory/history?type=inbound`, {
     headers: { Cookie: adminCookie },
@@ -608,7 +608,10 @@ after(async () => {
 
 test("a PostgreSQL backup restores usable warehouse systems and survives database restart", async () => {
   await startApi();
-  await assertSystemsCanUseRestoredDatabase();
+  await assertSystemsCanUseRestoredDatabase(
+    ["admin", "admin", "employee", "employee"],
+    ["employee", "employee"],
+  );
   restoredSnapshotAfterQueries = await snapshot(restoredPool);
   await stopApi();
 
@@ -638,5 +641,8 @@ test("a PostgreSQL backup restores usable warehouse systems and survives databas
   restoredPool = null;
 
   await startApi();
-  await assertSystemsCanUseRestoredDatabase();
+  await assertSystemsCanUseRestoredDatabase(
+    ["admin", "admin", "admin", "employee", "employee", "employee"],
+    ["employee", "employee", "employee"],
+  );
 });

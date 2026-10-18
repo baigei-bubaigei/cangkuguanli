@@ -3,12 +3,14 @@ import { adminSessionCookie, currentAdmin } from "../../../../../src/auth/admin-
 import { currentCatalogActor } from "../../../../../src/auth/catalog-auth.js";
 import { currentEmployee, employeeSessionCookie } from "../../../../../src/auth/employee-auth.js";
 import { database } from "../../../../../src/db.js";
+import { writeOperationLog } from "../../../../../src/operation-logs.js";
 import {
   claimIdempotency,
   completeIdempotency,
   idempotencyResponse,
   missingIdempotencyKeyResponse,
   requestIdempotencyKey,
+  readIdempotencyPayload,
 } from "../../../../../src/idempotency.js";
 
 export const runtime = "nodejs";
@@ -158,13 +160,7 @@ export async function PATCH(request, { params }) {
   let body;
   let payload;
   try {
-    const rawBody = await request.text();
-    try {
-      body = JSON.parse(rawBody);
-      payload = body;
-    } catch {
-      payload = { unparsedJson: rawBody };
-    }
+    ({ body, payload } = await readIdempotencyPayload(request));
   } catch {
     return invalidRequest();
   }
@@ -336,6 +332,13 @@ export async function PATCH(request, { params }) {
       [transactionId, actor.account, actorDisplayName, actor.sourceSystem, before, after],
     );
     const correction = correctionResult.rows[0];
+    await writeOperationLog(client, {
+      actor,
+      operationType: "inventory_history_corrected",
+      targetType: "inventory_transaction",
+      targetId: transactionId,
+      content: { action: "更正业务记录" },
+    });
     const responseBody = {
       correction: {
         id: String(correction.id),

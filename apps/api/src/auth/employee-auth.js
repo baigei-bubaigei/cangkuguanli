@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { database } from "../db.js";
+import { writeOperationLog } from "../operation-logs.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
 export const employeeSessionCookie = "employee_session";
@@ -20,11 +21,28 @@ export async function loginEmployee(account, password) {
   if (!(await verifyPassword(password, row.password_hash))) return null;
 
   const token = randomBytes(32).toString("base64url");
-  await database().query(
-    `INSERT INTO employee_sessions (token_hash, employee_account_id)
-     VALUES ($1, $2)`,
-    [hashSessionToken(token), row.id],
-  );
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO employee_sessions (token_hash, employee_account_id)
+       VALUES ($1, $2)`,
+      [hashSessionToken(token), row.id],
+    );
+    await writeOperationLog(client, {
+      actor: { account: row.account, sourceSystem: "employee" },
+      operationType: "login",
+      targetType: "employee_account",
+      targetId: row.id,
+      content: { action: "登录" },
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 
   const employee = {
     account: row.account,
@@ -96,11 +114,36 @@ export async function changeEmployeePassword(token, password) {
 }
 
 export async function logoutEmployee(token) {
-  await database().query(
-    `UPDATE employee_sessions
-        SET revoked_at = CURRENT_TIMESTAMP
-      WHERE token_hash = $1
-        AND revoked_at IS NULL`,
-    [hashSessionToken(token)],
-  );
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `UPDATE employee_sessions AS session
+          SET revoked_at = CURRENT_TIMESTAMP
+         FROM employee_accounts AS account
+        WHERE session.token_hash = $1
+          AND session.revoked_at IS NULL
+          AND account.id = session.employee_account_id
+        RETURNING account.id AS account_id, account.account`,
+      [hashSessionToken(token)],
+    );
+    if (result.rowCount) {
+      const account = result.rows[0];
+      await writeOperationLog(client, {
+        actor: { account: account.account, sourceSystem: "employee" },
+        operationType: "logout",
+        targetType: "employee_account",
+        targetId: account.account_id,
+        content: { action: "退出" },
+      });
+      await client.query("COMMIT");
+    } else {
+      await client.query("ROLLBACK");
+    }
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

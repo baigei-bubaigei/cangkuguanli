@@ -7,6 +7,7 @@ import {
   idempotencyResponse,
   missingIdempotencyKeyResponse,
   requestIdempotencyKey,
+  readIdempotencyPayload,
 } from "../../../../../src/idempotency.js";
 import { writeOperationLog } from "../../../../../src/operation-logs.js";
 
@@ -224,13 +225,7 @@ export async function POST(request) {
   let body;
   let payload;
   try {
-    const rawBody = await request.text();
-    try {
-      body = JSON.parse(rawBody);
-      payload = body;
-    } catch {
-      payload = { unparsedJson: rawBody };
-    }
+    ({ body, payload } = await readIdempotencyPayload(request));
   } catch {
     return invalidRequest("请检查初始库存文件内容后重新上传。", null);
   }
