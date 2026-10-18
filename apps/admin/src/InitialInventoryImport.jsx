@@ -113,6 +113,7 @@ export default function InitialInventoryImport() {
     };
 
     return {
+      rowNumber: row.rowNumber,
       productName: text("productName"),
       spec: text("spec"),
       material: text("material"),
@@ -267,7 +268,7 @@ export default function InitialInventoryImport() {
             </table>
           </div>
           <p className="initial-import-note">
-            空白身份字段按空值匹配；同一产品身份、每件个数、仓库和货位的重复行会合并数量。已有库存会累加，管理员可持续分批导入。
+            空白身份字段按空值匹配；同一产品身份、每件个数、仓库和货位的重复行会合并数量，类别、类别名称或备注不一致时整批拒绝并提示原行号。已有库存会累加，管理员可持续分批导入。
           </p>
           <div className="initial-import-submit-row">
             <span>若有任何问题，请修正原文件并重新上传；本批次不会部分登记。</span>

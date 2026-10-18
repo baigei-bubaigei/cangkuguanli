@@ -447,6 +447,51 @@ test("invalid rows reject the entire batch and a stock capacity conflict rolls b
   );
   assert.equal(invalidBatchSuccess.rows[0].count, 0);
 
+  const conflictNames = [
+    `${accountPrefix}-类别冲突`,
+    `${accountPrefix}-类别名称冲突`,
+    `${accountPrefix}-备注冲突`,
+  ];
+  const conflictingRows = [
+    { rowNumber: 3, productName: `${accountPrefix}-冲突前有效行`, spec: "S0", material: "", color: "", perCase: 2, warehouse: `${accountPrefix}-冲突仓`, spot: "A-00", cases: 1, loose: 0 },
+    { rowNumber: 6, productName: conflictNames[0], spec: "S1", material: "", color: "", perCase: 2, category: "类别甲", categoryName: "通用名称", note: "通用备注", warehouse: `${accountPrefix}-冲突仓`, spot: "A-01", cases: 1, loose: 0 },
+    { rowNumber: 9, productName: conflictNames[0], spec: "S1", material: "", color: "", perCase: 2, category: "类别乙", categoryName: "通用名称", note: "通用备注", warehouse: `${accountPrefix}-冲突仓`, spot: "A-01", cases: 0, loose: 1 },
+    { rowNumber: 15, productName: conflictNames[1], spec: "S2", material: "", color: "", perCase: 4, category: "通用类别", categoryName: "名称甲", note: "通用备注", warehouse: `${accountPrefix}-冲突仓`, spot: "A-02", cases: 1, loose: 0 },
+    { rowNumber: 18, productName: conflictNames[1], spec: "S2", material: "", color: "", perCase: 4, category: "通用类别", categoryName: "名称乙", note: "通用备注", warehouse: `${accountPrefix}-冲突仓`, spot: "A-02", cases: 1, loose: 0 },
+    { rowNumber: 23, productName: conflictNames[2], spec: "S3", material: "", color: "", perCase: 6, category: "通用类别", categoryName: "通用名称", note: "备注甲", warehouse: `${accountPrefix}-冲突仓`, spot: "A-03", cases: 2, loose: 0 },
+    { rowNumber: 30, productName: conflictNames[2], spec: "S3", material: "", color: "", perCase: 6, category: "通用类别", categoryName: "通用名称", note: "备注乙", warehouse: `${accountPrefix}-冲突仓`, spot: "A-03", cases: 0, loose: 2 },
+  ];
+  const metadataConflictResponse = await postJson(
+    "/api/admin/initial-inventory/imports",
+    { rows: conflictingRows },
+    adminCookie,
+  );
+  assert.equal(metadataConflictResponse.status, 400);
+  const metadataConflictResult = await metadataConflictResponse.json();
+  assert.match(metadataConflictResult.error, /第 6、9、15、18、23、30 行/);
+  const metadataConflictBatchLog = await queryDatabase(
+    `SELECT operation_content
+       FROM system_operation_logs
+      WHERE target_type = 'initial_inventory_import_batch'
+        AND target_id = $1`,
+    [metadataConflictResult.batchId],
+  );
+  assert.equal(metadataConflictBatchLog.rowCount, 1);
+  assert.deepEqual(metadataConflictBatchLog.rows[0].operation_content, {
+    batchId: metadataConflictResult.batchId,
+    result: "failed",
+    receivedRows: 7,
+    importedRows: 0,
+    error: metadataConflictResult.error,
+  });
+  const metadataConflictProducts = await queryDatabase(
+    `SELECT count(*)::integer AS count
+       FROM product_specs
+      WHERE product_name = ANY($1::text[])`,
+    [[`${accountPrefix}-冲突前有效行`, ...conflictNames]],
+  );
+  assert.equal(metadataConflictProducts.rows[0].count, 0);
+
   const boundaryResponse = await postJson("/api/catalog/products", {
     name: `${accountPrefix}-库存上限`,
     spec: "S3",

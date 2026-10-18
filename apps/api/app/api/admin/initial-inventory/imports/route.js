@@ -43,6 +43,7 @@ function prepareRows(rows) {
   for (const [index, row] of rows.entries()) {
     if (!row || typeof row !== "object" || Array.isArray(row)) return { error: `第 ${index + 1} 行资料无效。` };
 
+    const rowNumber = Number.isInteger(row.rowNumber) && row.rowNumber >= 1 ? row.rowNumber : index + 1;
     const productName = normalizedIdentityText(row.productName);
     const spec = normalizedIdentityText(row.spec);
     const material = normalizedIdentityText(row.material);
@@ -61,20 +62,25 @@ function prepareRows(rows) {
       || !isQuantity(cases) || !isQuantity(loose)
       || (cases === 0 && loose === 0)
       || category === undefined || categoryName === undefined || note === undefined) {
-      return { error: `第 ${index + 1} 行资料无效，请修正原文件后重新上传。` };
+      return { error: `第 ${rowNumber} 行资料无效，请修正原文件后重新上传。` };
     }
 
     const key = JSON.stringify([productName, spec, material, color, perCase, warehouse, spot]);
     const groupedRow = groupedRows.get(key);
     if (groupedRow) {
+      if (groupedRow.category !== category
+        || groupedRow.categoryName !== categoryName
+        || groupedRow.note !== note) {
+        groupedRow.metadataConflict = true;
+      }
       const nextCases = groupedRow.cases + cases;
       const nextLoose = groupedRow.loose + loose;
       if (nextCases > maximumQuantity || nextLoose > maximumQuantity) {
-        return { error: `第 ${index + 1} 行与文件内重复行合并后的数量超出允许范围。` };
+        return { error: `第 ${rowNumber} 行与文件内重复行合并后的数量超出允许范围。` };
       }
       groupedRow.cases = nextCases;
       groupedRow.loose = nextLoose;
-      groupedRow.sourceRows.push(index + 1);
+      groupedRow.sourceRows.push(rowNumber);
       continue;
     }
 
@@ -91,11 +97,22 @@ function prepareRows(rows) {
       spot,
       cases,
       loose,
-      sourceRows: [index + 1],
+      sourceRows: [rowNumber],
     });
   }
 
-  return { groups: [...groupedRows.values()] };
+  const groups = [...groupedRows.values()];
+  const conflictingRows = [...new Set(groups
+    .filter((row) => row.metadataConflict)
+    .flatMap((row) => row.sourceRows))]
+    .sort((left, right) => left - right);
+  if (conflictingRows.length) {
+    return {
+      error: `同一产品、包装规格、仓库和货位的重复行中，商品类别、类别名称或备注不一致。请核对第 ${conflictingRows.join("、")} 行后重新上传。`,
+    };
+  }
+
+  return { groups };
 }
 
 async function productSpecId(client, row) {
