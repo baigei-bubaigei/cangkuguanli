@@ -271,6 +271,12 @@ export default function BusinessHistory({ sourceSystem }) {
                 disabled={savingCorrection}
               >×</button>
             </div>
+            <div className="business-history-correction-product">
+              <strong>{editingRecord.product.name || "未填写产品名"}</strong>
+              <small>
+                规格：{editingRecord.product.spec || "未填写"} · 材质：{editingRecord.product.material || "未填写"} · 颜色：{editingRecord.product.color || "未填写"} · 每件 {editingRecord.product.perCase} 个
+              </small>
+            </div>
             <p className="business-history-correction-description">仅修改原业务支持的数量、实际发生时间或备注，提交后库存与历史会一起更新。</p>
             <form className="business-history-correction-form" onSubmit={saveCorrection}>
               {editingRecord.operationType === "split" ? (
